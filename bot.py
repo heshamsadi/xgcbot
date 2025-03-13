@@ -158,9 +158,10 @@ async def _help(ctx):
     embed.add_field(
         name="Moderation",
         value=(
-            f"`{config.PREFIX}kick @user [reason]` - Kick a user from the server\n"
-            f"`{config.PREFIX}ban @user [reason]` - Ban a user from the server\n"
-            f"`{config.PREFIX}clear [amount]` - Clear messages from a channel\n"
+            f"`{config.PREFIX}kick <@user|name|id> [reason]` - Kick a user from the server\n"
+            f"`{config.PREFIX}ban <@user|name|id> [reason]` - Ban a user from the server\n"
+            f"`{config.PREFIX}unban <id> [reason]` - Unban a user by ID\n"
+            f"`{config.PREFIX}clear [amount]` - Clear messages in a channel\n"
         ),
         inline=False
     )
@@ -189,10 +190,23 @@ async def _help(ctx):
             f"`{config.PREFIX}channels role allow <role> <perm> #ch` - Allow permission\n"
             f"`{config.PREFIX}channels role deny <role> <perm> #ch` - Deny permission\n"
             f"`{config.PREFIX}channels set_permission #channel role permission true/false` - Set specific permission\n"
-            f"`{config.PREFIX}channels all_verified_only #ch1 #ch2` - Make all channels except listed ones verified-only\n"
+            f"`{config.PREFIX}channels all_verified_only ch1 ch2` - Make all channels except listed ones verified-only\n"
+            f"`{config.PREFIX}channels set_verified_only <name|id>` - Make specific channels verified-only (works with voice)\n"
+            f"`{config.PREFIX}channels set_public <name|id>` - Make specific channels public (works with voice)\n"
             f"`{config.PREFIX}channels preset <preset_name>` - Apply a preset permission configuration\n"
             f"`{config.PREFIX}channels lockdown <mode>` - Lock down server to prevent spam/raids\n"
             f"`{config.PREFIX}quicksetup` - Automatically set up default channel groups and permissions\n"
+        ),
+        inline=False
+    )
+    
+    # Roles commands
+    embed.add_field(
+        name="Roles",
+        value=(
+            f"`{config.PREFIX}assign <@user|name|id> <@role|name|id>` - Assign a role to a user\n"
+            f"`{config.PREFIX}remove <@user|name|id> <@role|name|id>` - Remove a role from a user\n"
+            f"`{config.PREFIX}role_info <@role|name|id>` - Get information about a role\n"
         ),
         inline=False
     )

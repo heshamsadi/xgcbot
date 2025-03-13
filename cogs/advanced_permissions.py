@@ -243,32 +243,41 @@ class AdvancedPermissions(commands.Cog):
         await ctx.send(f"✅ Set permission '{permission}' to {permission_status} for role '{role_name}' in group '{group_name}'")
     
     @channels.command(name="set_permission")
-    async def set_channel_permission(self, ctx, channel: discord.TextChannel, role_name: str, permission: str, value: bool):
+    async def set_channel_permission(self, ctx, channel_input, role_input, permission: str, value_str: str):
         """Set a permission for a role in a specific channel."""
-        # Find the role
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
+        # Validate permission value
+        if value_str.lower() not in ["true", "false"]:
+            return await ctx.send("❌ Permission value must be 'true' or 'false'.")
+        
+        value = value_str.lower() == "true"
+        
+        # Resolve the channel
+        guild = ctx.guild
+        channel = self._resolve_channel(guild, channel_input)
+        
+        if not channel:
+            return await ctx.send("❌ Channel not found. Please specify a valid channel mention, name, or ID.")
+        
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
         if not role:
-            return await ctx.send(f"❌ Role '{role_name}' doesn't exist.")
+            return await ctx.send("❌ Role not found. Please specify a valid role mention, name, or ID.")
         
-        # Check if the permission is valid
-        valid_permissions = [
-            "read_messages", "send_messages", "embed_links", "attach_files", 
-            "read_message_history", "mention_everyone", "add_reactions"
-        ]
+        # Validate the permission
+        if not hasattr(discord.Permissions, permission):
+            return await ctx.send(f"❌ Invalid permission: {permission}")
         
-        if permission not in valid_permissions:
-            valid_perms_text = ", ".join(valid_permissions)
-            return await ctx.send(f"❌ Invalid permission: '{permission}'. Valid permissions are: {valid_perms_text}")
+        # Update the permissions data
+        if "role_permissions" not in self.permissions_data:
+            self.permissions_data["role_permissions"] = {}
         
-        # Initialize role permissions if needed
         if str(role.id) not in self.permissions_data["role_permissions"]:
-            self.permissions_data["role_permissions"][str(role.id)] = {}
+            self.permissions_data["role_permissions"][str(role.id)] = {"channels": {}}
         
-        # Initialize channel permissions for this role if needed
         if "channels" not in self.permissions_data["role_permissions"][str(role.id)]:
             self.permissions_data["role_permissions"][str(role.id)]["channels"] = {}
         
-        # Set the permission
         if str(channel.id) not in self.permissions_data["role_permissions"][str(role.id)]["channels"]:
             self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)] = {}
         
@@ -276,201 +285,331 @@ class AdvancedPermissions(commands.Cog):
         self._save_permissions_data()
         
         permission_status = "allowed" if value else "denied"
-        await ctx.send(f"✅ Set permission '{permission}' to {permission_status} for role '{role_name}' in channel #{channel.name}")
-    
-    @channels.command(name="set_public")
-    async def set_public_channels(self, ctx, *channels: discord.TextChannel):
-        """Make channels visible to everyone."""
-        if not channels:
-            return await ctx.send("❌ Please specify at least one channel to make public.")
-        
-        # Add channels to public list
-        added_channels = []
-        for channel in channels:
-            if channel.id not in self.permissions_data["public_channels"]:
-                self.permissions_data["public_channels"].append(channel.id)
-                added_channels.append(f"#{channel.name}")
-        
-        self._save_permissions_data()
-        
-        # Immediately apply permissions to these channels
-        guild = ctx.guild
-        
-        # Get the verified role
-        verified_role = guild.get_role(config.VERIFIED_ROLE_ID)
-        if not verified_role:
-            await ctx.send("❌ Error: Verified role not found. Please check your configuration.")
-            if added_channels:
-                added_text = ", ".join(added_channels)
-                return await ctx.send(f"✅ Added {added_text} to public channels, but could not apply permissions.")
-            return
-        
-        # Get everyone role (unverified users)
-        everyone_role = guild.default_role
-        
-        status_msg = await ctx.send("Setting permissions for these channels...")
-        
-        try:
-            for channel in channels:
-                # Set permissions
-                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
-                await channel.set_permissions(everyone_role, read_messages=True, read_message_history=True)
-        
-            await status_msg.edit(content=f"✅ Made {', '.join([f'#{c.name}' for c in channels])} public (visible to everyone) and applied permissions.")
-            
-        except discord.Forbidden:
-            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
-        except Exception as e:
-            await ctx.send(f"❌ Error setting permissions: {str(e)}")
+        await ctx.send(f"✅ Set permission '{permission}' to {permission_status} for role '{role.name}' [ID: {role.id}] in channel {channel.name} [ID: {channel.id}]")
     
     @channels.command(name="set_verified_only")
-    async def set_verified_only_channels(self, ctx, *channels: discord.TextChannel):
-        """Make channels visible only to verified users."""
-        if not channels:
-            return await ctx.send("❌ Please specify at least one channel to make verified-only.")
+    async def set_verified_only(self, ctx, *channels_input):
+        """Make channels visible only to verified users. Accept channel mentions, names, or IDs."""
+        if not channels_input:
+            return await ctx.send("❌ Please specify at least one channel.")
         
-        # Remove channels from public list
-        removed_channels = []
-        for channel in channels:
-            if channel.id in self.permissions_data["public_channels"]:
-                self.permissions_data["public_channels"].remove(channel.id)
-                removed_channels.append(f"#{channel.name}")
+        # Initialize the verified_only group if it doesn't exist
+        if "verified_only" not in self.permissions_data["channel_groups"]:
+            self.permissions_data["channel_groups"]["verified_only"] = []
         
-        # Add channels to verified_only group if it exists
-        if "verified_only" in self.permissions_data["channel_groups"]:
-            for channel in channels:
+        # Process each channel input (could be a mention, name, or ID)
+        added_channels = []
+        guild = ctx.guild
+        
+        for channel_input in channels_input:
+            channel = None
+            
+            # Check if it's a mention (starts with <# and ends with >)
+            if channel_input.startswith('<#') and channel_input.endswith('>'):
+                try:
+                    channel_id = int(channel_input[2:-1])
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            # Check if it's an ID (all digits)
+            elif channel_input.isdigit():
+                try:
+                    channel_id = int(channel_input)
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            else:
+                # Try to find by name
+                channel_name = channel_input.lstrip('#')  # Remove # if present
+                channel = discord.utils.get(guild.channels, name=channel_name)
+            
+            if channel:
+                # Add to verified_only group if not already in it
                 if channel.id not in self.permissions_data["channel_groups"]["verified_only"]:
                     self.permissions_data["channel_groups"]["verified_only"].append(channel.id)
+                added_channels.append(f"{channel.name} ({channel.type}) [ID: {channel.id}]")
         
         self._save_permissions_data()
         
         # Immediately apply permissions to these channels
         guild = ctx.guild
-        
-        # Get the verified role
         verified_role = guild.get_role(config.VERIFIED_ROLE_ID)
-        if not verified_role:
-            await ctx.send("❌ Error: Verified role not found. Please check your configuration.")
-            if removed_channels:
-                removed_text = ", ".join(removed_channels)
-                return await ctx.send(f"✅ Added {removed_text} to verified-only channels, but could not apply permissions.")
-            return
-        
-        # Get everyone role (unverified users)
         everyone_role = guild.default_role
         
-        status_msg = await ctx.send("Setting permissions for these channels...")
-        
-        try:
-            for channel in channels:
-                # Set permissions
-                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
-                await channel.set_permissions(everyone_role, read_messages=False)
-        
-            await status_msg.edit(content=f"✅ Made {', '.join([f'#{c.name}' for c in channels])} verified-only (only visible to verified users) and applied permissions.")
-            
-        except discord.Forbidden:
-            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
-        except Exception as e:
-            await ctx.send(f"❌ Error setting permissions: {str(e)}")
-    
-    @channels.command(name="all_verified_only")
-    async def set_all_verified_only(self, ctx, *channel_args):
-        """
-        Make ALL channels verified-only EXCEPT the specified channels.
-        Usage: !channels all_verified_only #welcome #rules #verification
-            OR: !channels all_verified_only welcome rules verification
-        This will make all channels except those listed visible only to verified users.
-        """
-        guild = ctx.guild
-        
-        # Convert text names to channel objects
-        exclude_channels = []
-        for arg in channel_args:
-            # Check if it's a channel mention
-            if arg.startswith("<#") and arg.endswith(">"):
-                channel_id = int(arg[2:-1])
-                channel = guild.get_channel(channel_id)
-                if channel:
-                    exclude_channels.append(channel)
-            # Otherwise treat as channel name
-            else:
-                # Remove any spaces or special characters from input
-                clean_name = arg.lower().strip()
-                for channel in guild.text_channels:
-                    # Clean the channel name for comparison
-                    clean_channel_name = channel.name.lower().replace('-', '').replace('_', '').replace('・', '')
-                    arg_clean = clean_name.replace('-', '').replace('_', '').replace('・', '')
-                    
-                    # Check if the name is in the channel name
-                    if arg_clean in clean_channel_name:
-                        exclude_channels.append(channel)
-                        break
-        
-        if not exclude_channels:
-            return await ctx.send("❌ Could not find any matching channels. Please use #channel mentions or valid channel names.")
-        
-        # Get all text channels
-        all_channels = guild.text_channels
-        
-        # Filter out excluded channels
-        excluded_ids = [channel.id for channel in exclude_channels]
-        channels_to_restrict = [channel for channel in all_channels if channel.id not in excluded_ids]
-        
-        if not channels_to_restrict:
-            return await ctx.send("❌ No channels to restrict. Make sure you're not excluding all channels.")
-        
-        # Get the verified role
-        verified_role = guild.get_role(config.VERIFIED_ROLE_ID)
         if not verified_role:
             return await ctx.send("❌ Error: Verified role not found. Please check your configuration.")
         
+        for channel_input in channels_input:
+            channel = None
+            
+            # Check if it's a mention
+            if channel_input.startswith('<#') and channel_input.endswith('>'):
+                try:
+                    channel_id = int(channel_input[2:-1])
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            # Check if it's an ID (all digits)
+            elif channel_input.isdigit():
+                try:
+                    channel_id = int(channel_input)
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            else:
+                # Try to find by name
+                channel_name = channel_input.lstrip('#')
+                channel = discord.utils.get(guild.channels, name=channel_name)
+            
+            if channel:
+                try:
+                    # Set permissions for verified role - can see and interact
+                    await channel.set_permissions(verified_role, view_channel=True, 
+                                                connect=True if isinstance(channel, discord.VoiceChannel) else None,
+                                                read_messages=True if isinstance(channel, discord.TextChannel) else None)
+                    
+                    # Set permissions for everyone role - cannot see
+                    await channel.set_permissions(everyone_role, view_channel=False,
+                                                connect=False if isinstance(channel, discord.VoiceChannel) else None,
+                                                read_messages=False if isinstance(channel, discord.TextChannel) else None)
+                    
+                except discord.Forbidden:
+                    await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+                except Exception as e:
+                    await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        if added_channels:
+            added_text = ", ".join(added_channels)
+            await ctx.send(f"✅ Made the following channels verified-only: {added_text}")
+        else:
+            await ctx.send("❌ No valid channels specified.")
+    
+    @channels.command(name="set_public")
+    async def set_public(self, ctx, *channels_input):
+        """Make channels visible to everyone. Accept channel mentions, names, or IDs."""
+        if not channels_input:
+            return await ctx.send("❌ Please specify at least one channel.")
+        
+        # Initialize the public_channels list if it doesn't exist
+        if "public_channels" not in self.permissions_data:
+            self.permissions_data["public_channels"] = []
+        
+        # Process each channel input (could be a mention, name, or ID)
+        added_channels = []
+        guild = ctx.guild
+        
+        for channel_input in channels_input:
+            channel = None
+            
+            # Check if it's a mention
+            if channel_input.startswith('<#') and channel_input.endswith('>'):
+                try:
+                    channel_id = int(channel_input[2:-1])
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            # Check if it's an ID (all digits)
+            elif channel_input.isdigit():
+                try:
+                    channel_id = int(channel_input)
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            else:
+                # Try to find by name (both text and voice channels)
+                channel_name = channel_input.lstrip('#')  # Remove # if present
+                channel = discord.utils.get(guild.channels, name=channel_name)
+            
+            if channel:
+                # Add to public_channels if not already in it
+                if channel.id not in self.permissions_data["public_channels"]:
+                    self.permissions_data["public_channels"].append(channel.id)
+                added_channels.append(f"{channel.name} ({channel.type}) [ID: {channel.id}]")
+        
+        self._save_permissions_data()
+        
+        # Immediately apply permissions to these channels
+        guild = ctx.guild
+        everyone_role = guild.default_role
+        
+        for channel_input in channels_input:
+            channel = None
+            
+            # Check if it's a mention
+            if channel_input.startswith('<#') and channel_input.endswith('>'):
+                try:
+                    channel_id = int(channel_input[2:-1])
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            # Check if it's an ID (all digits)
+            elif channel_input.isdigit():
+                try:
+                    channel_id = int(channel_input)
+                    channel = guild.get_channel(channel_id)
+                except (ValueError, TypeError):
+                    pass
+            else:
+                # Try to find by name
+                channel_name = channel_input.lstrip('#')
+                channel = discord.utils.get(guild.channels, name=channel_name)
+            
+            if channel:
+                try:
+                    # Set permissions for everyone role - can see
+                    await channel.set_permissions(everyone_role, view_channel=True,
+                                              connect=True if isinstance(channel, discord.VoiceChannel) else None,
+                                              read_messages=True if isinstance(channel, discord.TextChannel) else None)
+                except discord.Forbidden:
+                    await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+                except Exception as e:
+                    await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        if added_channels:
+            added_text = ", ".join(added_channels)
+            await ctx.send(f"✅ Made the following channels public: {added_text}")
+        else:
+            await ctx.send("❌ No valid channels specified.")
+    
+    @channels.command(name="all_verified_only")
+    async def set_all_verified_only(self, ctx, *channel_args):
+        """Make all channels verified-only except for the specified channels (which remain public).
+        
+        You can specify channels by mention (#channel), name (channel-name), or ID (1234567890).
+        """
+        guild = ctx.guild
+        
+        # Resolve channel arguments (could be mentions, names, or IDs)
+        exception_channels = []
+        
+        for arg in channel_args:
+            # Try to resolve mention
+            if arg.startswith('<#') and arg.endswith('>'):
+                try:
+                    channel_id = int(arg[2:-1])
+                    channel = guild.get_channel(channel_id)
+                    if channel:
+                        exception_channels.append(channel)
+                except (ValueError, TypeError):
+                    pass
+            # Check if it's an ID (all digits)
+            elif arg.isdigit():
+                try:
+                    channel_id = int(arg)
+                    channel = guild.get_channel(channel_id)
+                    if channel:
+                        exception_channels.append(channel)
+                except (ValueError, TypeError):
+                    pass
+            else:
+                # Try to find by name
+                channel_name = arg.lstrip('#')
+                channel = discord.utils.get(guild.channels, name=channel_name)
+                if channel:
+                    exception_channels.append(channel)
+        
+        # Confirm action
+        confirm_msg = "⚠️ This will make ALL channels verified-only (hidden from unverified users) except for:"
+        for channel in exception_channels:
+            confirm_msg += f"\n- {channel.name} ({channel.type}) [ID: {channel.id}]"
+        
+        confirm_msg += "\n\nDo you want to continue? (yes/no)"
+        await ctx.send(confirm_msg)
+        
+        # Wait for confirmation
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['yes', 'no', 'y', 'n']
+        
+        try:
+            response = await self.bot.wait_for('message', check=check, timeout=30.0)
+        except asyncio.TimeoutError:
+            return await ctx.send("❌ Action cancelled due to timeout.")
+        
+        if response.content.lower() not in ['yes', 'y']:
+            return await ctx.send("❌ Action cancelled.")
+        
+        # Process all channels
+        status_msg = await ctx.send("Configuring channel permissions... This may take a moment.")
+        
+        # Clear existing public channels
+        self.permissions_data["public_channels"] = [channel.id for channel in exception_channels]
+        
+        # Initialize or update the verified_only group
+        if "verified_only" not in self.permissions_data["channel_groups"]:
+            self.permissions_data["channel_groups"]["verified_only"] = []
+        
+        # Add all other channels to verified_only
+        verified_only_channels = []
+        for channel in guild.channels:
+            # Skip categories and non-text/voice channels
+            if isinstance(channel, discord.CategoryChannel) or not (isinstance(channel, discord.TextChannel) or isinstance(channel, discord.VoiceChannel)):
+                continue
+                
+            # Skip channels in exception list
+            if channel in exception_channels:
+                continue
+                
+            # Add to verified_only group
+            if channel.id not in self.permissions_data["channel_groups"]["verified_only"]:
+                self.permissions_data["channel_groups"]["verified_only"].append(channel.id)
+            
+            verified_only_channels.append(channel)
+        
+        self._save_permissions_data()
+        
+        # Apply permissions
+        modified_count = 0
+        
+        # Get the verified role
+        verified_role = guild.get_role(config.VERIFIED_ROLE_ID)
+        if not verified_role:
+            await ctx.send("❌ Error: Verified role not found. Please check your configuration.")
+            return
+        
         # Get everyone role (unverified users)
         everyone_role = guild.default_role
         
-        status_msg = await ctx.send(f"Making {len(channels_to_restrict)} channels verified-only... This may take a moment.")
-        
-        try:
-            # Update permissions data
-            self.permissions_data["public_channels"] = excluded_ids
-            
-            # Make sure verified_only group exists
-            if "verified_only" not in self.permissions_data["channel_groups"]:
-                self.permissions_data["channel_groups"]["verified_only"] = []
-            
-            # Add all channels to verified_only group
-            for channel in channels_to_restrict:
-                if channel.id not in self.permissions_data["channel_groups"]["verified_only"]:
-                    self.permissions_data["channel_groups"]["verified_only"].append(channel.id)
-            
-            self._save_permissions_data()
-            
-            # Apply permissions
-            modified_count = 0
-            excluded_count = 0
-            
-            # First make the excluded channels public
-            for channel in exclude_channels:
-                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
-                await channel.set_permissions(everyone_role, read_messages=True, read_message_history=True)
-                excluded_count += 1
-                await asyncio.sleep(0.5)  # Avoid rate limiting
-            
-            # Then make all other channels verified-only
-            for channel in channels_to_restrict:
-                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
-                await channel.set_permissions(everyone_role, read_messages=False)
+        # Apply permissions for verified-only channels
+        for channel in verified_only_channels:
+            try:
+                # Set permissions for verified role - can see
+                if isinstance(channel, discord.VoiceChannel):
+                    await channel.set_permissions(verified_role, view_channel=True, connect=True)
+                    await channel.set_permissions(everyone_role, view_channel=False, connect=False)
+                else:  # Text channel
+                    await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
+                    await channel.set_permissions(everyone_role, read_messages=False)
+                
                 modified_count += 1
-                await asyncio.sleep(0.5)  # Avoid rate limiting
-            
-            await status_msg.edit(content=f"✅ Permission setup complete!\n"
-                                        f"• {excluded_count} public channels (visible to everyone): {', '.join([f'#{c.name}' for c in exclude_channels])}\n"
-                                        f"• {modified_count} verified-only channels (hidden from unverified users)")
-            
-        except discord.Forbidden:
-            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
-        except Exception as e:
-            await ctx.send(f"❌ Error setting permissions: {str(e)}")
+                
+                # Add a short delay to avoid rate limiting
+                await asyncio.sleep(0.5)
+                
+            except discord.Forbidden:
+                await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+            except Exception as e:
+                await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        # Apply permissions for public channels
+        for channel in exception_channels:
+            try:
+                # Set permissions for everyone role - can see
+                if isinstance(channel, discord.VoiceChannel):
+                    await channel.set_permissions(everyone_role, view_channel=True, connect=True)
+                else:  # Text channel
+                    await channel.set_permissions(everyone_role, read_messages=True, read_message_history=True)
+                
+                modified_count += 1
+                
+                # Add a short delay to avoid rate limiting
+                await asyncio.sleep(0.5)
+                
+            except discord.Forbidden:
+                await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+            except Exception as e:
+                await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        await status_msg.edit(content=f"✅ Operation complete! Made all channels verified-only except for the specified ones. Modified permissions for {modified_count} channels.")
     
     @channels.command(name="info")
     async def channel_info(self, ctx, channel: discord.TextChannel = None):
@@ -527,7 +666,7 @@ class AdvancedPermissions(commands.Cog):
         
         await ctx.send(embed=embed)
     
-    @channels.group(name="role", invoke_without_command=True)
+    @commands.group(name="role", invoke_without_command=True)
     async def channel_role(self, ctx):
         """Commands for managing role permissions across channels."""
         embed = discord.Embed(
@@ -564,230 +703,446 @@ class AdvancedPermissions(commands.Cog):
         
         await ctx.send(embed=embed)
     
-    @channel_role.command(name="view")
-    async def view_role_perms(self, ctx, *, role_name: str):
-        """View permissions for a role across all channels."""
-        # Find the role
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
-        if not role:
-            return await ctx.send(f"❌ Role '{role_name}' not found.")
+    def _resolve_channel(self, guild, channel_input):
+        """Resolve a channel from mention, name, or ID."""
+        channel = None
         
+        # Check if it's a mention (starts with <# and ends with >)
+        if channel_input.startswith('<#') and channel_input.endswith('>'):
+            try:
+                channel_id = int(channel_input[2:-1])
+                channel = guild.get_channel(channel_id)
+            except (ValueError, TypeError):
+                pass
+        # Check if it's an ID (all digits)
+        elif channel_input.isdigit():
+            try:
+                channel_id = int(channel_input)
+                channel = guild.get_channel(channel_id)
+            except (ValueError, TypeError):
+                pass
+        else:
+            # Try to find by name (both text and voice channels)
+            channel_name = channel_input.lstrip('#')  # Remove # if present
+            channel = discord.utils.get(guild.channels, name=channel_name)
+        
+        return channel
+    
+    def _resolve_role(self, guild, role_input):
+        """Resolve a role from mention, name, or ID."""
+        role = None
+        
+        # Check if it's a mention (starts with <@ and ends with >)
+        if role_input.startswith('<@&') and role_input.endswith('>'):
+            try:
+                role_id = int(role_input[3:-1])
+                role = guild.get_role(role_id)
+            except (ValueError, TypeError):
+                pass
+        # Check if it's an ID (all digits)
+        elif role_input.isdigit():
+            try:
+                role_id = int(role_input)
+                role = guild.get_role(role_id)
+            except (ValueError, TypeError):
+                pass
+        else:
+            # Try to find by name
+            role = discord.utils.get(guild.roles, name=role_input)
+        
+        return role
+    
+    def _resolve_user(self, guild, user_input):
+        """Resolve a user from mention, name, or ID."""
+        user = None
+        
+        # Check if it's a mention (starts with <@ and ends with >)
+        if user_input.startswith('<@') and user_input.endswith('>'):
+            # Handle the case where it might be <@!id> format
+            user_id_str = user_input.replace('<@!', '').replace('<@', '').replace('>', '')
+            try:
+                user_id = int(user_id_str)
+                user = guild.get_member(user_id)
+            except (ValueError, TypeError):
+                pass
+        # Check if it's an ID (all digits)
+        elif user_input.isdigit():
+            try:
+                user_id = int(user_input)
+                user = guild.get_member(user_id)
+            except (ValueError, TypeError):
+                pass
+        else:
+            # Try to find by name
+            user = discord.utils.find(lambda m: m.name.lower() == user_input.lower() or 
+                                   (m.nick and m.nick.lower() == user_input.lower()), guild.members)
+        
+        return user
+    
+    @channel_role.command(name="view")
+    async def role_view(self, ctx, role_input):
+        """View permissions for a specific role across all channels."""
+        guild = ctx.guild
+        
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
+        if not role:
+            return await ctx.send("❌ Role not found. Please specify a valid role mention, name, or ID.")
+        
+        # Check if this role has any permissions set
+        if "role_permissions" not in self.permissions_data or str(role.id) not in self.permissions_data["role_permissions"]:
+            return await ctx.send(f"No custom permissions found for role '{role.name}' [ID: {role.id}].")
+        
+        role_data = self.permissions_data["role_permissions"][str(role.id)]
+        
+        # Create an embed to display the permissions
         embed = discord.Embed(
-            title=f"Permissions for {role.name}",
-            description="Permissions across different channels",
+            title=f"Permissions for role: {role.name}",
+            description=f"Role ID: {role.id}\nColor: {role.color}\nPosition: {role.position}",
             color=role.color
         )
         
-        # Check permissions in each channel
-        channels_with_perms = []
-        for channel in ctx.guild.text_channels:
-            overwrite = channel.overwrites_for(role)
-            if overwrite._values:  # Has some permissions set
-                perm_list = []
-                for perm, value in overwrite:
-                    if value is not None:  # Skip neutral permissions
-                        perm_status = "✅" if value else "❌"
-                        perm_list.append(f"{perm_status} {perm}")
-                
-                if perm_list:
-                    channels_with_perms.append((channel, perm_list))
+        # Add channel-specific permissions
+        if "channels" in role_data and role_data["channels"]:
+            channel_perms = []
+            for channel_id, perms in role_data["channels"].items():
+                channel = guild.get_channel(int(channel_id))
+                if channel:
+                    channel_name = channel.name
+                    perm_str = ", ".join([f"{perm} = {value}" for perm, value in perms.items()])
+                    channel_perms.append(f"#{channel_name} [ID: {channel_id}]: {perm_str}")
+            
+            if channel_perms:
+                embed.add_field(
+                    name="Channel Permissions",
+                    value="\n".join(channel_perms) if channel_perms else "None",
+                    inline=False
+                )
         
-        # Sort channels by permission count
-        channels_with_perms.sort(key=lambda x: len(x[1]), reverse=True)
-        
-        # Add fields for channels with permissions
-        for channel, perm_list in channels_with_perms[:10]:  # Limit to avoid too many fields
-            embed.add_field(
-                name=f"#{channel.name}",
-                value="\n".join(perm_list[:5]) + (f"\n*...and {len(perm_list) - 5} more*" if len(perm_list) > 5 else ""),
-                inline=True
-            )
-        
-        if len(channels_with_perms) > 10:
-            embed.add_field(
-                name="More Channels",
-                value=f"*...and {len(channels_with_perms) - 10} more channels*",
-                inline=False
-            )
-        elif not channels_with_perms:
-            embed.add_field(
-                name="No Custom Permissions",
-                value=f"This role has no custom permissions set in any channels.",
-                inline=False
-            )
-        
-        # Check if role is in any group permissions
-        role_id = str(role.id)
-        if role_id in self.permissions_data["role_permissions"]:
-            if "groups" in self.permissions_data["role_permissions"][role_id]:
-                group_perms = self.permissions_data["role_permissions"][role_id]["groups"]
-                if group_perms:
-                    embed.add_field(
-                        name="Group Permissions",
-                        value="\n".join([f"**{group}**: " + ", ".join([f"{p} ({v})" for p, v in perms.items()][:3]) for group, perms in group_perms.items()]),
-                        inline=False
-                    )
+        # Add group permissions
+        if "groups" in role_data and role_data["groups"]:
+            group_perms = []
+            for group_name, perms in role_data["groups"].items():
+                perm_str = ", ".join([f"{perm} = {value}" for perm, value in perms.items()])
+                group_perms.append(f"{group_name}: {perm_str}")
+            
+            if group_perms:
+                embed.add_field(
+                    name="Channel Group Permissions",
+                    value="\n".join(group_perms) if group_perms else "None",
+                    inline=False
+                )
         
         await ctx.send(embed=embed)
-    
+
     @channel_role.command(name="allow")
-    async def role_allow_perm(self, ctx, role_name: str, permission: str, *channels: discord.TextChannel):
-        """Allow a permission for a role in specified channels."""
-        # Find the role
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
-        if not role:
-            return await ctx.send(f"❌ Role '{role_name}' not found.")
-        
-        # Validate the permission
-        try:
-            getattr(discord.Permissions(), permission)
-        except AttributeError:
-            return await ctx.send(f"❌ '{permission}' is not a valid permission. Use `!channels role` to see valid permissions.")
-        
-        if not channels:
+    async def role_allow(self, ctx, role_input, permission: str, *channel_inputs):
+        """Allow a permission for a role in specific channels."""
+        if not channel_inputs:
             return await ctx.send("❌ Please specify at least one channel.")
         
-        status_msg = await ctx.send(f"Setting permissions... This may take a moment.")
+        guild = ctx.guild
         
-        try:
-            success_channels = []
-            for channel in channels:
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
+        if not role:
+            return await ctx.send("❌ Role not found. Please specify a valid role mention, name, or ID.")
+        
+        # Validate the permission
+        if not hasattr(discord.Permissions, permission):
+            return await ctx.send(f"❌ Invalid permission: {permission}")
+        
+        # Process each channel
+        processed_channels = []
+        for channel_input in channel_inputs:
+            channel = self._resolve_channel(guild, channel_input)
+            
+            if not channel:
+                await ctx.send(f"⚠️ Channel not found: {channel_input}")
+                continue
+            
+            # Update the permissions data
+            if "role_permissions" not in self.permissions_data:
+                self.permissions_data["role_permissions"] = {}
+            
+            if str(role.id) not in self.permissions_data["role_permissions"]:
+                self.permissions_data["role_permissions"][str(role.id)] = {"channels": {}}
+            
+            if "channels" not in self.permissions_data["role_permissions"][str(role.id)]:
+                self.permissions_data["role_permissions"][str(role.id)]["channels"] = {}
+            
+            if str(channel.id) not in self.permissions_data["role_permissions"][str(role.id)]["channels"]:
+                self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)] = {}
+            
+            # Set the permission
+            self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)][permission] = True
+            
+            # Store the updated channel
+            processed_channels.append(f"{channel.name} [ID: {channel.id}]")
+            
+            try:
+                # Apply the permission immediately
                 overwrite = channel.overwrites_for(role)
                 setattr(overwrite, permission, True)
                 await channel.set_permissions(role, overwrite=overwrite)
-                success_channels.append(channel.name)
-                await asyncio.sleep(0.5)  # Avoid rate limiting
-            
-            await status_msg.edit(content=f"✅ Allowed '{permission}' for role '{role.name}' in channels: {', '.join(['#' + name for name in success_channels])}")
-            
-        except discord.Forbidden:
-            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
-        except Exception as e:
-            await ctx.send(f"❌ Error setting permissions: {str(e)}")
-    
+            except discord.Forbidden:
+                await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+            except Exception as e:
+                await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        # Save the updated permissions
+        self._save_permissions_data()
+        
+        if processed_channels:
+            channels_text = ", ".join(processed_channels)
+            await ctx.send(f"✅ Allowed '{permission}' for role '{role.name}' [ID: {role.id}] in channels: {channels_text}")
+        else:
+            await ctx.send("❌ No channels were updated.")
+
     @channel_role.command(name="deny")
-    async def role_deny_perm(self, ctx, role_name: str, permission: str, *channels: discord.TextChannel):
-        """Deny a permission for a role in specified channels."""
-        # Find the role
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
-        if not role:
-            return await ctx.send(f"❌ Role '{role_name}' not found.")
-        
-        # Validate the permission
-        try:
-            getattr(discord.Permissions(), permission)
-        except AttributeError:
-            return await ctx.send(f"❌ '{permission}' is not a valid permission. Use `!channels role` to see valid permissions.")
-        
-        if not channels:
+    async def role_deny(self, ctx, role_input, permission: str, *channel_inputs):
+        """Deny a permission for a role in specific channels."""
+        if not channel_inputs:
             return await ctx.send("❌ Please specify at least one channel.")
         
-        status_msg = await ctx.send(f"Setting permissions... This may take a moment.")
+        guild = ctx.guild
         
-        try:
-            success_channels = []
-            for channel in channels:
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
+        if not role:
+            return await ctx.send("❌ Role not found. Please specify a valid role mention, name, or ID.")
+        
+        # Validate the permission
+        if not hasattr(discord.Permissions, permission):
+            return await ctx.send(f"❌ Invalid permission: {permission}")
+        
+        # Process each channel
+        processed_channels = []
+        for channel_input in channel_inputs:
+            channel = self._resolve_channel(guild, channel_input)
+            
+            if not channel:
+                await ctx.send(f"⚠️ Channel not found: {channel_input}")
+                continue
+            
+            # Update the permissions data
+            if "role_permissions" not in self.permissions_data:
+                self.permissions_data["role_permissions"] = {}
+            
+            if str(role.id) not in self.permissions_data["role_permissions"]:
+                self.permissions_data["role_permissions"][str(role.id)] = {"channels": {}}
+            
+            if "channels" not in self.permissions_data["role_permissions"][str(role.id)]:
+                self.permissions_data["role_permissions"][str(role.id)]["channels"] = {}
+            
+            if str(channel.id) not in self.permissions_data["role_permissions"][str(role.id)]["channels"]:
+                self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)] = {}
+            
+            # Set the permission
+            self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)][permission] = False
+            
+            # Store the updated channel
+            processed_channels.append(f"{channel.name} [ID: {channel.id}]")
+            
+            try:
+                # Apply the permission immediately
                 overwrite = channel.overwrites_for(role)
                 setattr(overwrite, permission, False)
                 await channel.set_permissions(role, overwrite=overwrite)
-                success_channels.append(channel.name)
-                await asyncio.sleep(0.5)  # Avoid rate limiting
-            
-            await status_msg.edit(content=f"✅ Denied '{permission}' for role '{role.name}' in channels: {', '.join(['#' + name for name in success_channels])}")
-            
-        except discord.Forbidden:
-            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
-        except Exception as e:
-            await ctx.send(f"❌ Error setting permissions: {str(e)}")
-    
+            except discord.Forbidden:
+                await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+            except Exception as e:
+                await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        # Save the updated permissions
+        self._save_permissions_data()
+        
+        if processed_channels:
+            channels_text = ", ".join(processed_channels)
+            await ctx.send(f"✅ Denied '{permission}' for role '{role.name}' [ID: {role.id}] in channels: {channels_text}")
+        else:
+            await ctx.send("❌ No channels were updated.")
+
     @channel_role.command(name="reset")
-    async def role_reset_perm(self, ctx, role_name: str, permission: str, *channels: discord.TextChannel):
-        """Reset a permission for a role in specified channels."""
-        # Find the role
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
-        if not role:
-            return await ctx.send(f"❌ Role '{role_name}' not found.")
-        
-        # Validate the permission
-        try:
-            getattr(discord.Permissions(), permission)
-        except AttributeError:
-            return await ctx.send(f"❌ '{permission}' is not a valid permission. Use `!channels role` to see valid permissions.")
-        
-        if not channels:
+    async def role_reset(self, ctx, role_input, permission: str, *channel_inputs):
+        """Reset a permission for a role in specific channels."""
+        if not channel_inputs:
             return await ctx.send("❌ Please specify at least one channel.")
         
-        status_msg = await ctx.send(f"Resetting permissions... This may take a moment.")
+        guild = ctx.guild
         
-        try:
-            success_channels = []
-            for channel in channels:
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
+        if not role:
+            return await ctx.send("❌ Role not found. Please specify a valid role mention, name, or ID.")
+        
+        # Validate the permission
+        if not hasattr(discord.Permissions, permission):
+            return await ctx.send(f"❌ Invalid permission: {permission}")
+        
+        # Process each channel
+        processed_channels = []
+        for channel_input in channel_inputs:
+            channel = self._resolve_channel(guild, channel_input)
+            
+            if not channel:
+                await ctx.send(f"⚠️ Channel not found: {channel_input}")
+                continue
+            
+            # Update the permissions data
+            if ("role_permissions" in self.permissions_data and 
+                str(role.id) in self.permissions_data["role_permissions"] and 
+                "channels" in self.permissions_data["role_permissions"][str(role.id)] and 
+                str(channel.id) in self.permissions_data["role_permissions"][str(role.id)]["channels"] and 
+                permission in self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)]):
+                
+                # Remove the permission
+                del self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)][permission]
+                
+                # Clean up empty dictionaries
+                if not self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)]:
+                    del self.permissions_data["role_permissions"][str(role.id)]["channels"][str(channel.id)]
+                
+                if not self.permissions_data["role_permissions"][str(role.id)]["channels"]:
+                    del self.permissions_data["role_permissions"][str(role.id)]["channels"]
+                
+                if not self.permissions_data["role_permissions"][str(role.id)]:
+                    del self.permissions_data["role_permissions"][str(role.id)]
+            
+            # Store the updated channel
+            processed_channels.append(f"{channel.name} [ID: {channel.id}]")
+            
+            try:
+                # Apply the permission reset immediately
                 overwrite = channel.overwrites_for(role)
                 setattr(overwrite, permission, None)
                 
-                # Check if all permissions are now None (neutral)
-                is_empty = True
+                # Check if all permissions are None, if so, remove the overwrite
+                all_none = True
                 for perm, value in overwrite:
                     if value is not None:
-                        is_empty = False
+                        all_none = False
                         break
                 
-                if is_empty:
-                    # Remove the entire overwrite if all permissions are neutral
+                if all_none:
                     await channel.set_permissions(role, overwrite=None)
                 else:
                     await channel.set_permissions(role, overwrite=overwrite)
-                    
-                success_channels.append(channel.name)
-                await asyncio.sleep(0.5)  # Avoid rate limiting
-            
-            await status_msg.edit(content=f"✅ Reset '{permission}' for role '{role.name}' in channels: {', '.join(['#' + name for name in success_channels])}")
-            
-        except discord.Forbidden:
-            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
-        except Exception as e:
-            await ctx.send(f"❌ Error setting permissions: {str(e)}")
-    
+            except discord.Forbidden:
+                await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+            except Exception as e:
+                await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        # Save the updated permissions
+        self._save_permissions_data()
+        
+        if processed_channels:
+            channels_text = ", ".join(processed_channels)
+            await ctx.send(f"✅ Reset '{permission}' for role '{role.name}' [ID: {role.id}] in channels: {channels_text}")
+        else:
+            await ctx.send("❌ No channels were updated.")
+
     @channel_role.command(name="copy")
-    async def role_copy_perms(self, ctx, from_role: str, to_role: str, channel: discord.TextChannel = None):
-        """Copy permissions from one role to another."""
-        # Find the roles
-        role_from = discord.utils.get(ctx.guild.roles, name=from_role)
-        if not role_from:
-            return await ctx.send(f"❌ Source role '{from_role}' not found.")
+    async def role_copy_permissions(self, ctx, from_role_input, to_role_input, channel_input=None):
+        """Copy permissions from one role to another for all or a specific channel."""
+        guild = ctx.guild
+        
+        # Resolve the source role
+        from_role = self._resolve_role(guild, from_role_input)
+        
+        if not from_role:
+            return await ctx.send("❌ Source role not found. Please specify a valid role mention, name, or ID.")
+        
+        # Resolve the target role
+        to_role = self._resolve_role(guild, to_role_input)
+        
+        if not to_role:
+            return await ctx.send("❌ Target role not found. Please specify a valid role mention, name, or ID.")
+        
+        # Check if we're copying for a specific channel or all channels
+        specific_channel = None
+        if channel_input:
+            specific_channel = self._resolve_channel(guild, channel_input)
             
-        role_to = discord.utils.get(ctx.guild.roles, name=to_role)
-        if not role_to:
-            return await ctx.send(f"❌ Target role '{to_role}' not found.")
+            if not specific_channel:
+                return await ctx.send("❌ Channel not found. Please specify a valid channel mention, name, or ID.")
         
-        # If no channel is specified, copy for all channels
-        channels_to_update = [channel] if channel else ctx.guild.text_channels
+        # Check if the source role has any permissions
+        if ("role_permissions" not in self.permissions_data or 
+            str(from_role.id) not in self.permissions_data["role_permissions"]):
+            return await ctx.send(f"❌ No permissions found for role '{from_role.name}' [ID: {from_role.id}].")
         
-        status_msg = await ctx.send(f"Copying permissions from '{role_from.name}' to '{role_to.name}'... This may take a moment.")
+        from_role_data = self.permissions_data["role_permissions"][str(from_role.id)]
         
-        try:
-            updated_count = 0
+        # Initialize target role data if it doesn't exist
+        if "role_permissions" not in self.permissions_data:
+            self.permissions_data["role_permissions"] = {}
+        
+        if str(to_role.id) not in self.permissions_data["role_permissions"]:
+            self.permissions_data["role_permissions"][str(to_role.id)] = {}
+        
+        # Copy channel permissions
+        copied_channels = []
+        if "channels" in from_role_data and from_role_data["channels"]:
+            if "channels" not in self.permissions_data["role_permissions"][str(to_role.id)]:
+                self.permissions_data["role_permissions"][str(to_role.id)]["channels"] = {}
             
-            for ch in channels_to_update:
-                # Get overwrite for source role
-                from_overwrite = ch.overwrites_for(role_from)
+            for channel_id, perms in from_role_data["channels"].items():
+                # Skip if we're only copying for a specific channel
+                if specific_channel and str(specific_channel.id) != channel_id:
+                    continue
                 
-                # Apply to target role if overwrite exists
-                if from_overwrite._values:
-                    await ch.set_permissions(role_to, overwrite=from_overwrite)
-                    updated_count += 1
+                channel = guild.get_channel(int(channel_id))
+                if not channel:
+                    continue
                 
-                await asyncio.sleep(0.5)  # Avoid rate limiting
+                # Copy the permissions
+                self.permissions_data["role_permissions"][str(to_role.id)]["channels"][channel_id] = perms.copy()
+                copied_channels.append(channel)
+                
+                # Apply the permissions immediately
+                try:
+                    overwrite = discord.PermissionOverwrite()
+                    for perm_name, perm_value in perms.items():
+                        setattr(overwrite, perm_name, perm_value)
+                    
+                    await channel.set_permissions(to_role, overwrite=overwrite)
+                except discord.Forbidden:
+                    await ctx.send(f"❌ Error: I don't have permission to modify channel {channel.name}.")
+                except Exception as e:
+                    await ctx.send(f"❌ Error setting permissions for {channel.name}: {str(e)}")
+        
+        # Copy group permissions if we're copying all
+        copied_groups = []
+        if not specific_channel and "groups" in from_role_data and from_role_data["groups"]:
+            if "groups" not in self.permissions_data["role_permissions"][str(to_role.id)]:
+                self.permissions_data["role_permissions"][str(to_role.id)]["groups"] = {}
             
-            if channel:
-                await status_msg.edit(content=f"✅ Copied permissions from '{role_from.name}' to '{role_to.name}' in #{channel.name}")
-            else:
-                await status_msg.edit(content=f"✅ Copied permissions from '{role_from.name}' to '{role_to.name}' in {updated_count} channels")
+            for group_name, perms in from_role_data["groups"].items():
+                # Copy the permissions
+                self.permissions_data["role_permissions"][str(to_role.id)]["groups"][group_name] = perms.copy()
+                copied_groups.append(group_name)
+        
+        # Save the updated permissions
+        self._save_permissions_data()
+        
+        # Generate response message
+        response = f"✅ Copied permissions from role '{from_role.name}' [ID: {from_role.id}] to '{to_role.name}' [ID: {to_role.id}]"
+        
+        if specific_channel:
+            response += f" for channel {specific_channel.name} [ID: {specific_channel.id}]"
+        else:
+            if copied_channels:
+                response += f"\n• Copied channel permissions for {len(copied_channels)} channels"
             
-        except discord.Forbidden:
-            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
-        except Exception as e:
-            await ctx.send(f"❌ Error copying permissions: {str(e)}")
+            if copied_groups:
+                response += f"\n• Copied group permissions for {len(copied_groups)} groups"
+        
+        await ctx.send(response)
     
     @channels.command(name="preset")
     async def apply_preset(self, ctx, preset_name: str):
@@ -919,38 +1274,46 @@ class AdvancedPermissions(commands.Cog):
             
             self._save_permissions_data()
             
-            # Apply permissions to public channels
+            # Apply permissions
+            modified_count = 0
+            
+            # First make the public channels public
             for channel in public_channels:
                 await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
                 await channel.set_permissions(everyone_role, read_messages=True, read_message_history=True)
+                modified_count += 1
                 await asyncio.sleep(0.3)
             
-            # Apply permissions to info-only channels
+            # Then make the info-only channels info-only
             for channel in info_only_channels:
                 await channel.set_permissions(verified_role, read_messages=True, send_messages=False)
                 await channel.set_permissions(everyone_role, read_messages=True, send_messages=False, read_message_history=True)
+                modified_count += 1
                 await asyncio.sleep(0.3)
             
-            # Apply permissions to verified-only channels
+            # Then make the verified-only channels verified-only
             for channel in verified_only_channels:
                 await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
                 await channel.set_permissions(everyone_role, read_messages=False)
+                modified_count += 1
                 await asyncio.sleep(0.3)
             
-            # Apply permissions to trader-only channels
+            # Then make the trader-only channels trader-only
             if trader_role:
                 for channel in trader_only_channels:
                     await channel.set_permissions(trader_role, read_messages=True, send_messages=True)
                     await channel.set_permissions(verified_role, read_messages=False)
                     await channel.set_permissions(everyone_role, read_messages=False)
+                    modified_count += 1
                     await asyncio.sleep(0.3)
             
-            # Apply permissions to admin-only channels
+            # Then make the admin-only channels admin-only
             if admin_role:
                 for channel in admin_only_channels:
                     await channel.set_permissions(admin_role, read_messages=True, send_messages=True)
                     await channel.set_permissions(verified_role, read_messages=False)
                     await channel.set_permissions(everyone_role, read_messages=False)
+                    modified_count += 1
                     await asyncio.sleep(0.3)
             
             # Create summary embed

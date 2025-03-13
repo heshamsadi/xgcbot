@@ -13,6 +13,31 @@ class ServerSetup(commands.Cog):
     async def cog_check(self, ctx):
         return ctx.author.guild_permissions.administrator
 
+    # Helper function to resolve role from mention, name, or ID
+    def _resolve_role(self, guild, role_input):
+        """Resolve a role from mention, name, or ID."""
+        role = None
+        
+        # Check if it's a mention (starts with <@& and ends with >)
+        if role_input.startswith('<@&') and role_input.endswith('>'):
+            try:
+                role_id = int(role_input[3:-1])
+                role = guild.get_role(role_id)
+            except (ValueError, TypeError):
+                pass
+        # Check if it's an ID (all digits)
+        elif role_input.isdigit():
+            try:
+                role_id = int(role_input)
+                role = guild.get_role(role_id)
+            except (ValueError, TypeError):
+                pass
+        else:
+            # Try to find by name
+            role = discord.utils.get(guild.roles, name=role_input)
+        
+        return role
+
     @commands.command(name="setup_permissions")
     async def setup_permissions(self, ctx):
         """Set up basic server permissions for verified/unverified roles."""
@@ -216,6 +241,128 @@ class ServerSetup(commands.Cog):
                                      f"• Role '{role_name}' can {'view' if can_view else 'not view'} these channels\n"
                                      f"• Role '{role_name}' can {'send messages in' if can_send else 'not send messages in'} these channels")
 
+    @commands.command()
+    async def setup_role(self, ctx, role_input, color: str = None, *, permissions: str = None):
+        """Set up a role with specific color and permissions.
+        
+        You can use a role mention, name, or ID.
+        Example: !setup_role Admin #FF0000 administrator
+        """
+        guild = ctx.guild
+        
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
+        if not role:
+            # Create the role if it doesn't exist
+            try:
+                role = await guild.create_role(name=role_input)
+                await ctx.send(f"✅ Created new role: {role.name} [ID: {role.id}]")
+            except discord.Forbidden:
+                return await ctx.send("❌ I don't have permission to create roles.")
+            except Exception as e:
+                return await ctx.send(f"❌ Error creating role: {str(e)}")
+        
+        # Process color if provided
+        if color:
+            try:
+                # Handle hex color codes
+                if color.startswith('#'):
+                    color = color[1:]
+                
+                # Convert to RGB
+                rgb_color = discord.Color.from_rgb(
+                    int(color[0:2], 16),
+                    int(color[2:4], 16),
+                    int(color[4:6], 16)
+                )
+                
+                await role.edit(color=rgb_color)
+                await ctx.send(f"✅ Updated color for role: {role.name} [ID: {role.id}]")
+            except Exception as e:
+                await ctx.send(f"❌ Error setting color: {str(e)}")
+        
+        # Process permissions if provided
+        if permissions:
+            perm_list = permissions.split()
+            
+            try:
+                new_perms = discord.Permissions()
+                
+                for perm in perm_list:
+                    try:
+                        setattr(new_perms, perm, True)
+                    except:
+                        await ctx.send(f"⚠️ Unknown permission: {perm}")
+                
+                await role.edit(permissions=new_perms)
+                await ctx.send(f"✅ Updated permissions for role: {role.name} [ID: {role.id}]")
+            except Exception as e:
+                await ctx.send(f"❌ Error setting permissions: {str(e)}")
+        
+        # Final confirmation
+        embed = discord.Embed(
+            title="Role Setup Complete",
+            description=f"Role: {role.name} [ID: {role.id}]",
+            color=role.color
+        )
+        
+        embed.add_field(name="Color", value=str(role.color), inline=True)
+        
+        # List permissions that are enabled
+        enabled_perms = [p[0] for p in role.permissions if p[1]]
+        embed.add_field(
+            name="Permissions",
+            value=", ".join(enabled_perms) if enabled_perms else "None",
+            inline=False
+        )
+        
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    async def make_role_pingable(self, ctx, role_input):
+        """Make a role mentionable by everyone.
+        
+        You can use a role mention, name, or ID.
+        """
+        guild = ctx.guild
+        
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
+        if not role:
+            return await ctx.send(f"❌ Role not found. Please specify a valid mention, name, or ID.")
+        
+        try:
+            await role.edit(mentionable=True)
+            await ctx.send(f"✅ Role '{role.name}' [ID: {role.id}] is now mentionable by everyone.")
+        except discord.Forbidden:
+            await ctx.send("❌ I don't have permission to edit roles.")
+        except Exception as e:
+            await ctx.send(f"❌ Error making role pingable: {str(e)}")
+
+    @commands.command()
+    async def make_role_unpingable(self, ctx, role_input):
+        """Make a role not mentionable by everyone.
+        
+        You can use a role mention, name, or ID.
+        """
+        guild = ctx.guild
+        
+        # Resolve the role
+        role = self._resolve_role(guild, role_input)
+        
+        if not role:
+            return await ctx.send(f"❌ Role not found. Please specify a valid mention, name, or ID.")
+        
+        try:
+            await role.edit(mentionable=False)
+            await ctx.send(f"✅ Role '{role.name}' [ID: {role.id}] is no longer mentionable by everyone.")
+        except discord.Forbidden:
+            await ctx.send("❌ I don't have permission to edit roles.")
+        except Exception as e:
+            await ctx.send(f"❌ Error making role unpingable: {str(e)}")
+
     @commands.group(name="setup", invoke_without_command=True)
     async def setup(self, ctx):
         """Main setup command group."""
@@ -339,6 +486,16 @@ class ServerSetup(commands.Cog):
                 f"`{config.PREFIX}create_category \"Name\"` - Create a new category\n"
                 f"`{config.PREFIX}create_channel \"Category\" \"channel-name\" [public]` - Create a new channel\n"
                 f"`{config.PREFIX}add_role_to_channels \"Role\" [\"Category\"] [can_view] [can_send]` - Add role permissions\n"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Role Management",
+            value=(
+                f"`{config.PREFIX}setup_role \"Role\" [color] [permissions]` - Set up a role with color and permissions\n"
+                f"`{config.PREFIX}make_role_pingable \"Role\"` - Make a role mentionable by everyone\n"
+                f"`{config.PREFIX}make_role_unpingable \"Role\"` - Make a role not mentionable by everyone\n"
             ),
             inline=False
         )

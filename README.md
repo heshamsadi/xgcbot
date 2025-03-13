@@ -235,6 +235,73 @@ Lockdown modes:
 
 During lockdown, message sending is disabled for all users, but they can still read messages.
 
+### 8. Managing Voice Channels
+
+You can manage permissions for voice channels just like text channels:
+
+```
+!channels set_verified_only general-voice  # Make a voice channel verified-only
+!channels set_public xgc-theater           # Make a voice channel public
+```
+
+For voice channels, use the channel name directly (don't use # or mentions).
+
+### 9. Using Channel IDs
+
+For all channel commands, you can use channel IDs instead of names:
+
+```
+!channels set_verified_only 1234567890123456  # Make channel with this ID verified-only
+!channels set_public 9876543210987654         # Make channel with this ID public
+```
+
+This is especially useful when:
+- Multiple channels have the same name
+- Channel names have special characters
+- You need to reference voice channels
+
+To get a channel's ID, right-click on it and select "Copy ID" (requires Developer Mode enabled in Discord settings).
+
+## Advanced Features
+
+### Using IDs Instead of Names
+
+For all commands that accept user, role, or channel inputs, you can use IDs instead of names:
+
+```
+# Using role IDs
+!assign 1234567890123456 9876543210987654  # Assign a role by ID to a user by ID
+!assign @UserMention 9876543210987654      # Assign a role by ID to a mentioned user
+!role_info 9876543210987654                # Get info about a role by ID
+
+# Using user IDs
+!kick 1234567890123456                     # Kick a user by ID
+!ban 1234567890123456                      # Ban a user by ID
+!unban 1234567890123456                    # Unban a user by ID
+
+# Using channel IDs
+!channels set_verified_only 1234567890123456  # Make a channel verified-only by ID
+!channels set_public 9876543210987654         # Make a channel public by ID
+```
+
+This is especially useful when:
+- Discord's mention system isn't working well
+- You're dealing with entities with special characters in names
+- You need to reference users who aren't in the server (e.g., for banning)
+- You're targeting voice channels that can't be mentioned
+
+To get an ID, right-click on a user, role, or channel and select "Copy ID" (requires Developer Mode enabled in Discord settings).
+
+### 8. Managing Voice Channels
+You can manage permissions for voice channels just like text channels:
+
+```
+!channels set_verified_only general-voice  # Make a voice channel verified-only
+!channels set_public xgc-theater           # Make a voice channel public
+```
+
+For voice channels, use the channel name directly (don't use # or mentions).
+
 ## Configuration
 
 Edit the `config.py` file to customize:
