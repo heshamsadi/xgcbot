@@ -33,13 +33,20 @@ async def on_ready():
     ))
     
     # Load all cogs
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
+    async def load_extensions():
+        for extension in [
+            "cogs.moderation", 
+            "cogs.roles", 
+            "cogs.utils",
+            "cogs.verification",
+            "cogs.server_setup"
+        ]:
             try:
-                await bot.load_extension(f'cogs.{filename[:-3]}')
-                print(f'Loaded extension: {filename[:-3]}')
+                await bot.load_extension(extension)
+                print(f'Loaded extension: {extension}')
             except Exception as e:
-                print(f'Failed to load extension {filename[:-3]}: {e}')
+                print(f'Failed to load extension {extension}: {e}')
+    await load_extensions()
 
 @bot.event
 async def on_member_join(member):
@@ -148,12 +155,24 @@ async def _help(ctx):
     
     # Moderation commands
     embed.add_field(
-        name="Moderation (Mod only)",
+        name="Moderation",
         value=(
-            f"`{config.PREFIX}role @user [role]` - Assign a role to a user\n"
-            f"`{config.PREFIX}kick @user [reason]` - Kick a user\n"
-            f"`{config.PREFIX}ban @user [reason]` - Ban a user\n"
-            f"`{config.PREFIX}clear [number]` - Clear a number of messages\n"
+            f"`{config.PREFIX}kick @user [reason]` - Kick a user from the server\n"
+            f"`{config.PREFIX}ban @user [reason]` - Ban a user from the server\n"
+            f"`{config.PREFIX}clear [amount]` - Clear messages from a channel\n"
+        ),
+        inline=False
+    )
+    
+    # Server setup commands (admin only)
+    embed.add_field(
+        name="Server Setup (Admin Only)",
+        value=(
+            f"`{config.PREFIX}setup server` - Create a basic crypto server structure\n"
+            f"`{config.PREFIX}setup permissions` - Set up permissions for roles\n"
+            f"`{config.PREFIX}create_category \"Name\"` - Create a new category\n"
+            f"`{config.PREFIX}create_channel \"Category\" \"channel-name\" [public]` - Create a new channel\n"
+            f"`{config.PREFIX}add_role_to_channels \"Role\" [\"Category\"]` - Add role permissions\n"
         ),
         inline=False
     )

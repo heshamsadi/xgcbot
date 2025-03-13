@@ -1,6 +1,6 @@
 # XGC Crypto Discord Bot
 
-A Discord bot designed specifically for crypto communities with features including account verification, role management, moderation tools, and welcome/goodbye messages.
+A Discord bot designed specifically for crypto communities with features including account verification, role management, moderation tools, welcome/goodbye messages, and advanced server setup.
 
 ## Features
 
@@ -19,6 +19,11 @@ A Discord bot designed specifically for crypto communities with features includi
 ### 4. Welcome/Goodbye Messages
 - Automatic welcome messages for new members
 - Goodbye messages when members leave
+
+### 5. Server Setup
+- Advanced server setup tools for creating a complete crypto server structure
+- Automatic configuration of channel permissions
+- Role-based access control for channels
 
 ## Setup Instructions
 
@@ -54,11 +59,70 @@ A Discord bot designed specifically for crypto communities with features includi
 
 ## Commands
 
-- `!role @user [RoleName]` - Assign a role to a user (mod only)
-- `!getrole [RoleName]` - Self-assign an available role
-- `!kick @user [reason]` - Kick a user (mod only)
-- `!ban @user [reason]` - Ban a user (mod only)
-- `!clear [number]` - Clear specified number of messages (mod only)
+### General Commands
+- `!getrole [role]` - Self-assign a role from available roles
+- `!ping` - Check bot latency
+- `!info` - Show server information
+- `!botinfo` - Show bot information
+- `!crypto` - Display crypto disclaimer
+
+### Role Management
+- `!role @user [role]` - Assign a role to a user (mod only)
+
+### Moderation Commands
+- `!kick @user [reason]` - Kick a user from the server (mod only)
+- `!ban @user [reason]` - Ban a user from the server (mod only)
+- `!clear [amount]` - Clear a specific number of messages from a channel (mod only)
+
+### Server Setup Commands (Admin Only)
+- `!setup server` - Create a basic crypto server structure with categories and channels
+- `!setup permissions` - Set up permissions for verified/unverified users
+- `!create_category "Category Name"` - Create a new category with proper permissions
+- `!create_channel "Category Name" "channel-name" [public]` - Create a new channel in a category
+- `!add_role_to_channels "Role Name" ["Category Name"] [can_view=True] [can_send=True]` - Set channel permissions for a specific role
+
+## Server Setup Features
+
+The bot includes advanced server setup tools that make it easy to:
+
+1. **Manage Channel Permissions** - Automatically configure who can see which channels
+2. **Create Server Structure** - Set up a complete server structure with one command
+3. **Role-Based Access Control** - Control channel visibility based on roles
+
+### Permission System
+
+By default, the server setup creates:
+- Public channels: Visible to everyone (verified and unverified users)
+- Members-only channels: Only visible to verified users
+
+This ensures:
+- New users only see welcome/verification channels until they verify
+- Verified users see all content
+- Custom roles can have specific permissions per channel or category
+
+### Quick Setup
+
+Run `!setup server` to create a complete crypto server with the following structure:
+
+- **INFORMATION** category (public)
+  - welcome
+  - rules
+  - announcements
+  - verification
+
+- **COMMUNITY** category (verified only)
+  - general
+  - crypto-talk
+  - trading
+  - market-analysis
+
+- **RESOURCES** category (verified only)
+  - useful-links
+  - tutorials
+  - tools
+
+- **BOT COMMANDS** category (verified only)
+  - bot-commands
 
 ## Configuration
 
