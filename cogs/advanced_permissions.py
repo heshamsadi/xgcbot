@@ -666,7 +666,7 @@ class AdvancedPermissions(commands.Cog):
         
         await ctx.send(embed=embed)
     
-    @commands.group(name="role", invoke_without_command=True)
+    @channels.group(name="role", invoke_without_command=True)
     async def channel_role(self, ctx):
         """Commands for managing role permissions across channels."""
         embed = discord.Embed(

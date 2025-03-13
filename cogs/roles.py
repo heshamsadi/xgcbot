@@ -78,7 +78,7 @@ class RoleManagement(commands.Cog):
         
         return user
 
-    @commands.command(name="role")
+    @commands.command(name="assign_legacy_role")
     async def assign_role(self, ctx, member: discord.Member, *, role_name: str):
         """Assign a role to a user (Moderator only).
         
