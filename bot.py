@@ -184,9 +184,14 @@ async def _help(ctx):
         value=(
             f"`{config.PREFIX}channels` - Show all channel management commands\n"
             f"`{config.PREFIX}channels list` - List all channel groups\n"
+            f"`{config.PREFIX}channels info #channel` - Show permission details for a channel\n"
+            f"`{config.PREFIX}channels role view <role>` - Show permissions for a specific role\n"
+            f"`{config.PREFIX}channels role allow <role> <perm> #ch` - Allow permission\n"
+            f"`{config.PREFIX}channels role deny <role> <perm> #ch` - Deny permission\n"
             f"`{config.PREFIX}channels set_permission #channel role permission true/false` - Set specific permission\n"
-            f"`{config.PREFIX}channels apply_permissions` - Apply all permission settings\n"
             f"`{config.PREFIX}channels all_verified_only #ch1 #ch2` - Make all channels except listed ones verified-only\n"
+            f"`{config.PREFIX}channels preset <preset_name>` - Apply a preset permission configuration\n"
+            f"`{config.PREFIX}channels lockdown <mode>` - Lock down server to prevent spam/raids\n"
             f"`{config.PREFIX}quicksetup` - Automatically set up default channel groups and permissions\n"
         ),
         inline=False

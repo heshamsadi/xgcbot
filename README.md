@@ -88,6 +88,14 @@ A Discord bot designed specifically for crypto communities with features includi
 - `!channels set_public <#channel> [#channel2 ...]` - Make channels visible to everyone
 - `!channels set_verified_only <#channel> [#channel2 ...]` - Make channels visible only to verified users
 - `!channels all_verified_only <#channel> [#channel2 ...]` - Make all channels verified-only except the specified channels
+- `!channels info [#channel]` - Show permission details for a channel
+- `!channels role view <role>` - View permissions for a role across all channels
+- `!channels role allow <role> <permission> <#channel> [#channel2 ...]` - Allow a permission for a role
+- `!channels role deny <role> <permission> <#channel> [#channel2 ...]` - Deny a permission for a role
+- `!channels role reset <role> <permission> <#channel> [#channel2 ...]` - Reset a permission for a role
+- `!channels role copy <from_role> <to_role> [#channel]` - Copy permissions from one role to another
+- `!channels preset <preset_name>` - Apply a preset permission configuration (crypto, community, minimal)
+- `!channels lockdown <mode>` - Lock down server to prevent spam (all, public, verified, unlock)
 - `!quicksetup` - Automatically set up default channel groups and permissions
 
 ### Server Setup Commands (Admin Only)
@@ -187,6 +195,45 @@ This will:
 2. Identify channels by name pattern (welcome, trading, etc.)
 3. Assign appropriate permissions
 4. Set up verified role permissions
+
+### 5. Preset Configurations
+
+Apply pre-made permission configurations to your server:
+
+```
+!channels preset crypto
+```
+
+Available presets:
+- `crypto` - Optimal configuration for crypto servers with trading channels
+- `community` - General community server setup
+- `minimal` - Minimal configuration with basic public/private separation
+
+### 6. Role-Based Management
+
+Manage permissions for roles across many channels at once:
+
+```
+!channels role allow Moderator manage_messages #mod-chat #admin-chat #support
+!channels role deny Trader send_messages #announcements
+!channels role copy Admin Moderator
+```
+
+### 7. Emergency Lockdown
+
+Quickly lock down your server in case of spam or raids:
+
+```
+!channels lockdown all
+```
+
+Lockdown modes:
+- `all`: Lock down all channels (default)
+- `public`: Lock down only public channels
+- `verified`: Lock down channels visible to verified users
+- `unlock`: Remove the lockdown
+
+During lockdown, message sending is disabled for all users, but they can still read messages.
 
 ## Configuration
 
