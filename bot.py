@@ -186,6 +186,7 @@ async def _help(ctx):
             f"`{config.PREFIX}channels list` - List all channel groups\n"
             f"`{config.PREFIX}channels set_permission #channel role permission true/false` - Set specific permission\n"
             f"`{config.PREFIX}channels apply_permissions` - Apply all permission settings\n"
+            f"`{config.PREFIX}channels all_verified_only #ch1 #ch2` - Make all channels except listed ones verified-only\n"
             f"`{config.PREFIX}quicksetup` - Automatically set up default channel groups and permissions\n"
         ),
         inline=False

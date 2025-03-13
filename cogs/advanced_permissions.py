@@ -78,6 +78,7 @@ class AdvancedPermissions(commands.Cog):
                 f"`{config.PREFIX}channels apply_permissions` - Apply all permission settings\n"
                 f"`{config.PREFIX}channels set_public <#channel> [#channel2 ...]` - Make channels visible to everyone\n"
                 f"`{config.PREFIX}channels set_verified_only <#channel> [#channel2 ...]` - Make channels visible only to verified users\n"
+                f"`{config.PREFIX}channels all_verified_only <#channel> [#channel2 ...]` - Make all channels verified-only except the specified channels\n"
             ),
             inline=False
         )
@@ -291,11 +292,35 @@ class AdvancedPermissions(commands.Cog):
         
         self.save_permissions()
         
-        if added_channels:
-            added_text = ", ".join(added_channels)
-            await ctx.send(f"✅ Made {added_text} public (visible to everyone)")
-        else:
-            await ctx.send(f"ℹ️ All specified channels were already public")
+        # Immediately apply permissions to these channels
+        guild = ctx.guild
+        
+        # Get the verified role
+        verified_role = guild.get_role(config.VERIFIED_ROLE_ID)
+        if not verified_role:
+            await ctx.send("❌ Error: Verified role not found. Please check your configuration.")
+            if added_channels:
+                added_text = ", ".join(added_channels)
+                return await ctx.send(f"✅ Added {added_text} to public channels, but could not apply permissions.")
+            return
+        
+        # Get everyone role (unverified users)
+        everyone_role = guild.default_role
+        
+        status_msg = await ctx.send("Setting permissions for these channels...")
+        
+        try:
+            for channel in channels:
+                # Set permissions
+                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
+                await channel.set_permissions(everyone_role, read_messages=True, read_message_history=True)
+        
+            await status_msg.edit(content=f"✅ Made {', '.join([f'#{c.name}' for c in channels])} public (visible to everyone) and applied permissions.")
+            
+        except discord.Forbidden:
+            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
+        except Exception as e:
+            await ctx.send(f"❌ Error setting permissions: {str(e)}")
     
     @channels.command(name="set_verified_only")
     async def set_verified_only_channels(self, ctx, *channels: discord.TextChannel):
@@ -318,11 +343,106 @@ class AdvancedPermissions(commands.Cog):
         
         self.save_permissions()
         
-        if removed_channels:
-            removed_text = ", ".join(removed_channels)
-            await ctx.send(f"✅ Made {removed_text} verified-only (only visible to verified users)")
-        else:
-            await ctx.send(f"ℹ️ All specified channels were already verified-only")
+        # Immediately apply permissions to these channels
+        guild = ctx.guild
+        
+        # Get the verified role
+        verified_role = guild.get_role(config.VERIFIED_ROLE_ID)
+        if not verified_role:
+            await ctx.send("❌ Error: Verified role not found. Please check your configuration.")
+            if removed_channels:
+                removed_text = ", ".join(removed_channels)
+                return await ctx.send(f"✅ Added {removed_text} to verified-only channels, but could not apply permissions.")
+            return
+        
+        # Get everyone role (unverified users)
+        everyone_role = guild.default_role
+        
+        status_msg = await ctx.send("Setting permissions for these channels...")
+        
+        try:
+            for channel in channels:
+                # Set permissions
+                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
+                await channel.set_permissions(everyone_role, read_messages=False)
+        
+            await status_msg.edit(content=f"✅ Made {', '.join([f'#{c.name}' for c in channels])} verified-only (only visible to verified users) and applied permissions.")
+            
+        except discord.Forbidden:
+            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
+        except Exception as e:
+            await ctx.send(f"❌ Error setting permissions: {str(e)}")
+    
+    @channels.command(name="all_verified_only")
+    async def set_all_verified_only(self, ctx, *exclude_channels: discord.TextChannel):
+        """
+        Make ALL channels verified-only EXCEPT the specified channels.
+        Usage: !channels all_verified_only #welcome #rules #verification
+        This will make all channels except those listed visible only to verified users.
+        """
+        guild = ctx.guild
+        
+        # Get all text channels
+        all_channels = guild.text_channels
+        
+        # Filter out excluded channels
+        excluded_ids = [channel.id for channel in exclude_channels]
+        channels_to_restrict = [channel for channel in all_channels if channel.id not in excluded_ids]
+        
+        if not channels_to_restrict:
+            return await ctx.send("❌ No channels to restrict. Make sure you're not excluding all channels.")
+        
+        # Get the verified role
+        verified_role = guild.get_role(config.VERIFIED_ROLE_ID)
+        if not verified_role:
+            return await ctx.send("❌ Error: Verified role not found. Please check your configuration.")
+        
+        # Get everyone role (unverified users)
+        everyone_role = guild.default_role
+        
+        status_msg = await ctx.send(f"Making {len(channels_to_restrict)} channels verified-only... This may take a moment.")
+        
+        try:
+            # Update permissions data
+            self.permissions_data["public_channels"] = excluded_ids
+            
+            # Make sure verified_only group exists
+            if "verified_only" not in self.permissions_data["channel_groups"]:
+                self.permissions_data["channel_groups"]["verified_only"] = []
+            
+            # Add all channels to verified_only group
+            for channel in channels_to_restrict:
+                if channel.id not in self.permissions_data["channel_groups"]["verified_only"]:
+                    self.permissions_data["channel_groups"]["verified_only"].append(channel.id)
+            
+            self.save_permissions()
+            
+            # Apply permissions
+            modified_count = 0
+            excluded_count = 0
+            
+            # First make the excluded channels public
+            for channel in exclude_channels:
+                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
+                await channel.set_permissions(everyone_role, read_messages=True, read_message_history=True)
+                excluded_count += 1
+                await asyncio.sleep(0.5)  # Avoid rate limiting
+            
+            # Then make all other channels verified-only
+            for channel in channels_to_restrict:
+                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
+                await channel.set_permissions(everyone_role, read_messages=False)
+                modified_count += 1
+                await asyncio.sleep(0.5)  # Avoid rate limiting
+            
+            await status_msg.edit(content=f"✅ Permission setup complete!\n"
+                                        f"• {excluded_count} public channels (visible to everyone)\n"
+                                        f"• {modified_count} verified-only channels (hidden from unverified users)")
+            
+        except discord.Forbidden:
+            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
+        except Exception as e:
+            await ctx.send(f"❌ Error setting permissions: {str(e)}")
     
     @channels.command(name="apply_permissions")
     async def apply_permissions(self, ctx):
@@ -524,12 +644,39 @@ class AdvancedPermissions(commands.Cog):
                 inline=False
             )
         
+        # Apply permissions automatically
+        status_msg = await ctx.send("Applying permission settings...")
+        
+        # Get everyone role
+        everyone_role = ctx.guild.default_role
+        
+        # Apply permissions to channels
+        try:
+            # Apply permissions to public channels
+            for channel in welcome_channels:
+                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
+                await channel.set_permissions(everyone_role, read_messages=True, read_message_history=True)
+                await asyncio.sleep(0.5)  # Avoid rate limiting
+            
+            # Apply permissions to other channels - make them verified-only
+            all_other_channels = [ch for ch in ctx.guild.text_channels if ch not in welcome_channels]
+            for channel in all_other_channels:
+                await channel.set_permissions(verified_role, read_messages=True, send_messages=True)
+                await channel.set_permissions(everyone_role, read_messages=False)
+                await asyncio.sleep(0.5)  # Avoid rate limiting
+                
+            await status_msg.edit(content="✅ Permission settings applied successfully!")
+                
+        except discord.Forbidden:
+            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
+        except Exception as e:
+            await ctx.send(f"❌ Error setting permissions: {str(e)}")
+        
         embed.add_field(
-            name="Next Steps",
+            name="Permissions Applied",
             value=(
-                f"1. Review channel groups with `{config.PREFIX}channels list`\n"
-                f"2. Apply permissions with `{config.PREFIX}channels apply_permissions`\n"
-                f"3. Make adjustments as needed with `{config.PREFIX}channels` commands"
+                f"✅ Public channels are now visible to everyone\n"
+                f"✅ All other channels are now visible only to verified users"
             ),
             inline=False
         )

@@ -1,0 +1,15 @@
+{
+    "public_channels": [
+        1346524250227343473,
+        1346506902946840638,
+        1349873745761796106
+    ],
+    "role_permissions": {},
+    "channel_groups": {
+        "public": [],
+        "verified_only": [
+            1346513823636389928
+        ],
+        "moderator_only": []
+    }
+}

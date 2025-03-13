@@ -87,6 +87,7 @@ A Discord bot designed specifically for crypto communities with features includi
 - `!channels apply_permissions` - Apply all permission settings
 - `!channels set_public <#channel> [#channel2 ...]` - Make channels visible to everyone
 - `!channels set_verified_only <#channel> [#channel2 ...]` - Make channels visible only to verified users
+- `!channels all_verified_only <#channel> [#channel2 ...]` - Make all channels verified-only except the specified channels
 - `!quicksetup` - Automatically set up default channel groups and permissions
 
 ### Server Setup Commands (Admin Only)
