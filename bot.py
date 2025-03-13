@@ -39,7 +39,8 @@ async def on_ready():
             "cogs.roles", 
             "cogs.utils",
             "cogs.verification",
-            "cogs.server_setup"
+            "cogs.server_setup",
+            "cogs.advanced_permissions"
         ]:
             try:
                 await bot.load_extension(extension)
@@ -173,6 +174,19 @@ async def _help(ctx):
             f"`{config.PREFIX}create_category \"Name\"` - Create a new category\n"
             f"`{config.PREFIX}create_channel \"Category\" \"channel-name\" [public]` - Create a new channel\n"
             f"`{config.PREFIX}add_role_to_channels \"Role\" [\"Category\"]` - Add role permissions\n"
+        ),
+        inline=False
+    )
+    
+    # Advanced permission commands (admin only)
+    embed.add_field(
+        name="Advanced Permissions (Admin Only)",
+        value=(
+            f"`{config.PREFIX}channels` - Show all channel management commands\n"
+            f"`{config.PREFIX}channels list` - List all channel groups\n"
+            f"`{config.PREFIX}channels set_permission #channel role permission true/false` - Set specific permission\n"
+            f"`{config.PREFIX}channels apply_permissions` - Apply all permission settings\n"
+            f"`{config.PREFIX}quicksetup` - Automatically set up default channel groups and permissions\n"
         ),
         inline=False
     )

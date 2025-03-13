@@ -24,6 +24,8 @@ A Discord bot designed specifically for crypto communities with features includi
 - Advanced server setup tools for creating a complete crypto server structure
 - Automatic configuration of channel permissions
 - Role-based access control for channels
+- Granular permission management for roles and channels
+- Channel grouping for bulk permission management
 
 ## Setup Instructions
 
@@ -74,6 +76,19 @@ A Discord bot designed specifically for crypto communities with features includi
 - `!ban @user [reason]` - Ban a user from the server (mod only)
 - `!clear [amount]` - Clear a specific number of messages from a channel (mod only)
 
+### Advanced Permission Commands (Admin Only)
+- `!channels` - View available channel management commands
+- `!channels list` - List all channel groups and their channels
+- `!channels create_group <name>` - Create a new channel group
+- `!channels add_to_group <group_name> <#channel> [#channel2 ...]` - Add channels to a group
+- `!channels remove_from_group <group_name> <#channel> [#channel2 ...]` - Remove channels from a group
+- `!channels set_group_permission <group_name> <role_name> <permission> <true/false>` - Set permission for a role
+- `!channels set_permission <#channel> <role_name> <permission> <true/false>` - Set permission for a specific channel
+- `!channels apply_permissions` - Apply all permission settings
+- `!channels set_public <#channel> [#channel2 ...]` - Make channels visible to everyone
+- `!channels set_verified_only <#channel> [#channel2 ...]` - Make channels visible only to verified users
+- `!quicksetup` - Automatically set up default channel groups and permissions
+
 ### Server Setup Commands (Admin Only)
 - `!setup server` - Create a basic crypto server structure with categories and channels
 - `!setup permissions` - Set up permissions for verified/unverified users
@@ -123,6 +138,54 @@ Run `!setup server` to create a complete crypto server with the following struct
 
 - **BOT COMMANDS** category (verified only)
   - bot-commands
+
+## Advanced Permission Management
+
+The bot includes a powerful permission management system that allows you to:
+
+### 1. Channel Groups
+
+Create logical groups of channels that share the same permission settings:
+
+```
+!channels create_group trading
+!channels add_to_group trading #bitcoin #ethereum #altcoins
+```
+
+### 2. Role-Specific Permissions
+
+Give specific roles granular permissions on channels or channel groups:
+
+```
+!channels set_permission #bitcoin Analyst read_messages true
+!channels set_permission #bitcoin Analyst send_messages true
+!channels set_group_permission trading Trader read_messages true
+```
+
+### 3. Permission Types
+
+Control various permission types individually:
+- `read_messages` - Can see the channel
+- `send_messages` - Can send messages
+- `embed_links` - Can embed links
+- `attach_files` - Can upload files
+- `read_message_history` - Can read past messages
+- `mention_everyone` - Can mention @everyone
+- `add_reactions` - Can add reactions
+
+### 4. Quick Setup
+
+Automatically configure your server's permissions:
+
+```
+!quicksetup
+```
+
+This will:
+1. Create default channel groups
+2. Identify channels by name pattern (welcome, trading, etc.)
+3. Assign appropriate permissions
+4. Set up verified role permissions
 
 ## Configuration
 

@@ -310,6 +310,11 @@ class ServerSetup(commands.Cog):
         except Exception as e:
             await ctx.send(f"Error during server setup: {str(e)}")
 
+    @setup.command(name="permissions")
+    async def setup_permissions_subcommand(self, ctx):
+        """Set up basic server permissions for verified/unverified roles."""
+        await self.setup_permissions(ctx)
+
     @setup.command(name="help")
     async def setup_help(self, ctx):
         """Show help information for all setup commands."""
