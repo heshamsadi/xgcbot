@@ -35,7 +35,7 @@ SELF_ASSIGNABLE_ROLES = {
 WELCOME_MESSAGE = "Welcome to the XGC Trenches XRPL, {member_mention}! 🚀 Please check out <#{verification_channel}> to get verified."
 
 # Goodbye message format
-GOODBYE_MESSAGE = "**{member_name}** has left the server. Goodbye! 👋"
+GOODBYE_MESSAGE = "**{member_name}** has left the server. 👋"
 
 # Verification DM message
 VERIFICATION_DM = """
