@@ -29,7 +29,7 @@ class Verification(commands.Cog):
             embed = discord.Embed(
                 title="Server Verification",
                 description=(
-                    "Welcome to the XGC Crypto Server! 🚀\n\n"
+                    "Welcome to the XGC Trenches XRPL! 🚀\n\n"
                     "To get verified and access all channels, please react with ✅ to this message.\n\n"
                     "Once verified, you'll receive the Verified role and gain access to all community channels."
                 ),
@@ -59,7 +59,7 @@ class Verification(commands.Cog):
         embed = discord.Embed(
             title="Server Verification",
             description=(
-                "Welcome to the XGC Crypto Server! 🚀\n\n"
+                "Welcome to the XGC Trenches XRPL! 🚀\n\n"
                 "To get verified and access all channels, please react with ✅ to this message.\n\n"
                 "Once verified, you'll receive the Verified role and gain access to all community channels."
             ),
