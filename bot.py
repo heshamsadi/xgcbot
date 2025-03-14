@@ -4,6 +4,24 @@ import os
 import config
 import asyncio
 from datetime import datetime
+from flask import Flask
+from threading import Thread
+
+# Set up Flask web server
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_web_server():
+    app.run(host='0.0.0.0', port=8080)
+
+# Start web server in a separate thread
+def keep_alive():
+    server_thread = Thread(target=run_web_server)
+    server_thread.daemon = True
+    server_thread.start()
 
 # Set up intents
 intents = discord.Intents.default()
@@ -218,6 +236,8 @@ async def _help(ctx):
 if __name__ == "__main__":
     if not config.TOKEN:
         print("Error: No Discord token found in .env file")
-        exit(1)
-    
-    asyncio.run(bot.start(config.TOKEN))
+    else:
+        # Start the web server
+        keep_alive()
+        # Run the bot
+        bot.run(config.TOKEN)
