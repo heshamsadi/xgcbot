@@ -13,6 +13,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 # Channel IDs
 WELCOME_CHANNEL_ID = int(os.getenv('WELCOME_CHANNEL_ID', 0))
 VERIFICATION_CHANNEL_ID = int(os.getenv('VERIFICATION_CHANNEL_ID', 0))
+MOD_CHANNEL_ID = int(os.getenv('MOD_CHANNEL_ID', 0))
 
 # Message IDs
 VERIFICATION_MESSAGE_ID = int(os.getenv('VERIFICATION_MESSAGE_ID', 0))
@@ -31,14 +32,14 @@ SELF_ASSIGNABLE_ROLES = {
 }
 
 # Welcome message format
-WELCOME_MESSAGE = "Welcome to the XGC Crypto Server, {member_mention}! 🚀 Please check out <#{verification_channel}> to get verified."
+WELCOME_MESSAGE = "Welcome to the XGC Trenches XRPL, {member_mention}! 🚀 Please check out <#{verification_channel}> to get verified."
 
 # Goodbye message format
 GOODBYE_MESSAGE = "**{member_name}** has left the server. Goodbye! 👋"
 
 # Verification DM message
 VERIFICATION_DM = """
-Welcome to the XGC Crypto Server! 🚀
+Welcome to XGC Trenches XRPL! 🚀
 
 To get verified and access all channels, please:
 1. Go to <#{verification_channel}>

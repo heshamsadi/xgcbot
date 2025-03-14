@@ -75,13 +75,13 @@ async def on_member_join(member):
 @bot.event
 async def on_member_remove(member):
     """Event triggered when a member leaves the server."""
-    if config.WELCOME_CHANNEL_ID:
-        welcome_channel = bot.get_channel(config.WELCOME_CHANNEL_ID)
-        if welcome_channel:
+    if config.MOD_CHANNEL_ID:
+        mod_channel = bot.get_channel(config.MOD_CHANNEL_ID)
+        if mod_channel:
             goodbye_msg = config.GOODBYE_MESSAGE.format(
                 member_name=member.display_name
             )
-            await welcome_channel.send(goodbye_msg)
+            await mod_channel.send(goodbye_msg)
 
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -134,7 +134,7 @@ async def on_command_error(ctx, error):
 async def _help(ctx):
     """Shows all available commands."""
     embed = discord.Embed(
-        title="XGC Crypto Bot Help",
+        title="XGC Trenches XRPL Help",
         description="Here are all available commands:",
         color=discord.Color.blue(),
         timestamp=datetime.utcnow()
