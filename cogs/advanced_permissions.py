@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 from typing import Optional, List, Dict, Union, Tuple
+import datetime
 
 class AdvancedPermissions(commands.Cog):
     """Advanced permission management for Discord servers."""
@@ -80,6 +81,8 @@ class AdvancedPermissions(commands.Cog):
                 f"`{config.PREFIX}channels set_verified_only <#channel> [#channel2 ...]` - Make channels visible only to verified users\n"
                 f"`{config.PREFIX}channels all_verified_only <#channel> [#channel2 ...]` - Make all channels verified-only except the specified channels\n"
                 f"`{config.PREFIX}channels lockdown <mode>` - Lock down the server to prevent spam or raids\n"
+                f"`{config.PREFIX}channels restrict_send --channels #channel1 #channel2 --roles \"Role1\" \"Role2\" \"Mod\"` - Restrict sending messages in channels to specific roles\n"
+                f"`{config.PREFIX}channels list_restrictions` - List all channel restrictions currently set up\n"
             ),
             inline=False
         )
@@ -1512,6 +1515,142 @@ class AdvancedPermissions(commands.Cog):
             await status_msg.edit(content=f"🔓 Lockdown removed! Restored permissions for {modified_count} channels.")
         else:
             await status_msg.edit(content=f"🔒 Lockdown complete! Modified permissions for {modified_count} channels. Use `{config.PREFIX}channels lockdown unlock` to remove the lockdown.")
+    
+    @channels.command(name="restrict_send")
+    async def restrict_send(self, ctx, *args):
+        """
+        Restrict sending messages in channels to specific roles only.
+        
+        Usage:
+        {prefix}channels restrict_send --channels #channel1 #channel2 --roles "Role1" "Role2" "Mod"
+        
+        This allows only members with the specified roles to send messages in the specified channels,
+        while still allowing everyone to read the channels.
+        """
+        if not args:
+            return await ctx.send(f"❌ Usage: `{config.PREFIX}channels restrict_send --channels #channel1 #channel2 --roles \"Role1\" \"Role2\" \"Mod\"`")
+            
+        # Parse arguments
+        channels = []
+        roles = []
+        current_arg = None
+        
+        for arg in args:
+            if arg in ["--channels", "--roles"]:
+                current_arg = arg
+                continue
+                
+            if current_arg == "--channels":
+                channel = self._resolve_channel(ctx.guild, arg)
+                if channel:
+                    channels.append(channel)
+                else:
+                    await ctx.send(f"⚠️ Could not find channel: {arg}")
+            elif current_arg == "--roles":
+                role = self._resolve_role(ctx.guild, arg)
+                if role:
+                    roles.append(role)
+                else:
+                    await ctx.send(f"⚠️ Could not find role: {arg}")
+        
+        if not channels:
+            return await ctx.send("❌ No valid channels specified.")
+            
+        if not roles:
+            return await ctx.send("❌ No valid roles specified.")
+            
+        # Create a new channel group for this restriction if it doesn't exist
+        restriction_name = f"restricted_send_{int(datetime.datetime.now().timestamp())}"
+        if restriction_name not in self.permissions_data["channel_groups"]:
+            self.permissions_data["channel_groups"][restriction_name] = []
+            
+        # Add channels to the restriction group
+        for channel in channels:
+            if channel.id not in self.permissions_data["channel_groups"][restriction_name]:
+                self.permissions_data["channel_groups"][restriction_name].append(channel.id)
+        
+        self._save_permissions_data()
+        
+        # Apply permissions
+        messages = []
+        for channel in channels:
+            try:
+                # Allow roles to send messages
+                for role in roles:
+                    # Set specific permissions for allowed roles
+                    role_overwrite = discord.PermissionOverwrite()
+                    role_overwrite.send_messages = True
+                    await channel.set_permissions(role, overwrite=role_overwrite)
+                    
+                # Deny @everyone send permissions
+                everyone_overwrite = discord.PermissionOverwrite()
+                everyone_overwrite.send_messages = False
+                # We do not change view_channel permission so people can still read
+                await channel.set_permissions(ctx.guild.default_role, overwrite=everyone_overwrite)
+                
+                messages.append(f"✓ {channel.mention}")
+            except Exception as e:
+                messages.append(f"❌ {channel.mention}: {str(e)}")
+        
+        # Create summary embed
+        embed = discord.Embed(
+            title="Channel Send Permission Restriction",
+            description=f"Only the following roles can send messages in the specified channels:",
+            color=discord.Color.green()
+        )
+        
+        embed.add_field(
+            name="Roles With Send Permissions",
+            value="\n".join([f"• {role.name}" for role in roles]) or "None",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Channels Modified",
+            value="\n".join(messages) or "None",
+            inline=False
+        )
+        
+        await ctx.send(embed=embed)
+
+    @channels.command(name="list_restrictions")
+    async def list_restrictions(self, ctx):
+        """List all channel restrictions currently set up."""
+        restriction_groups = []
+        
+        for group_name, channel_ids in self.permissions_data["channel_groups"].items():
+            if group_name.startswith("restricted_send_"):
+                # This is a restriction group
+                channels = []
+                for channel_id in channel_ids:
+                    channel = ctx.guild.get_channel(channel_id)
+                    if channel:
+                        channels.append(channel.mention)
+                
+                if channels:
+                    restriction_groups.append({
+                        "name": group_name,
+                        "channels": channels
+                    })
+        
+        if not restriction_groups:
+            return await ctx.send("No channel restrictions are currently set up.")
+        
+        # Create embed
+        embed = discord.Embed(
+            title="Channel Restrictions",
+            description="These channels have send permission restrictions:",
+            color=discord.Color.blue()
+        )
+        
+        for group in restriction_groups:
+            embed.add_field(
+                name=f"Restriction Group: {group['name']}",
+                value="\n".join(group["channels"]) or "None",
+                inline=False
+            )
+        
+        await ctx.send(embed=embed)
     
     @commands.command(name="quicksetup")
     async def quick_setup(self, ctx):
