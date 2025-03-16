@@ -1652,6 +1652,261 @@ class AdvancedPermissions(commands.Cog):
         
         await ctx.send(embed=embed)
     
+    @channels.command(name="setup_xgc_permissions")
+    async def setup_xgc_permissions(self, ctx):
+        """
+        Automatically set up XGC server permissions based on the following structure:
+        
+        - New User (Before Verification): 
+          Can see: Total Members, XRP Price, Verification, Welcome, Rules
+          
+        - Verified User:
+          Can see all general chats, voice channels, raids, giveaways, game nights, and project hub
+          Cannot see Alpha Chat or mod channels
+          Cannot type in Information Channels
+          
+        - NFT Holder:
+          Same as Verified + can see and chat in Alpha Chat
+          
+        - XGC (Bots):
+          Same as NFT Holder + can access mod channels
+          
+        - Moderators:
+          Can see and type in all channels except bot-only sections
+          Can post in Information Channels
+          
+        - Admins:
+          Full access to everything
+        """
+        guild = ctx.guild
+        
+        # Get roles or create them if they don't exist
+        everyone_role = guild.default_role
+        verified_role = discord.utils.get(guild.roles, id=config.VERIFIED_ROLE_ID)
+        if not verified_role:
+            return await ctx.send("❌ Error: Verified role not found. Please set a VERIFIED_ROLE_ID in config.py")
+        
+        # Look for other roles
+        nft_holder_role = discord.utils.get(guild.roles, name="NFT Holder")
+        if not nft_holder_role:
+            await ctx.send("⚠️ 'NFT Holder' role not found. Creating it...")
+            try:
+                nft_holder_role = await guild.create_role(name="NFT Holder", color=discord.Color.purple())
+            except Exception as e:
+                await ctx.send(f"❌ Error creating NFT Holder role: {str(e)}")
+                return
+        
+        bot_role = discord.utils.get(guild.roles, name="XGC")
+        if not bot_role:
+            await ctx.send("⚠️ 'XGC' bot role not found. Creating it...")
+            try:
+                bot_role = await guild.create_role(name="XGC", color=discord.Color.blue())
+            except Exception as e:
+                await ctx.send(f"❌ Error creating XGC bot role: {str(e)}")
+                return
+        
+        mod_role = discord.utils.get(guild.roles, name="Moderator")
+        if not mod_role:
+            await ctx.send("⚠️ 'Moderator' role not found. Creating it...")
+            try:
+                mod_role = await guild.create_role(name="Moderator", color=discord.Color.red())
+            except Exception as e:
+                await ctx.send(f"❌ Error creating Moderator role: {str(e)}")
+                return
+        
+        admin_role = discord.utils.get(guild.roles, name="Admin")
+        if not admin_role:
+            await ctx.send("⚠️ 'Admin' role not found. Creating it...")
+            try:
+                admin_role = await guild.create_role(name="Admin", color=discord.Color.gold())
+            except Exception as e:
+                await ctx.send(f"❌ Error creating Admin role: {str(e)}")
+                return
+        
+        # Create channel groups
+        status_msg = await ctx.send("Setting up channel groups...")
+        
+        # Define our channel groups
+        channel_groups = {
+            "public": [],          # Channels visible to unverified users
+            "information": [],     # Read-only channels for information
+            "general": [],         # General channels for verified users
+            "alpha": [],           # NFT holder channels
+            "mod": [],            # Moderator channels
+            "bot": []             # Bot-only channels
+        }
+        
+        # Create the groups in our permissions data
+        for group_name in channel_groups.keys():
+            if group_name not in self.permissions_data["channel_groups"]:
+                self.permissions_data["channel_groups"][group_name] = []
+        
+        # Auto-categorize channels based on name
+        for channel in guild.channels:
+            if isinstance(channel, discord.CategoryChannel):
+                continue
+                
+            channel_name = channel.name.lower()
+            
+            # Public channels detection
+            if any(keyword in channel_name for keyword in ["verification", "welcome", "rules", "total-members", "xrp-price", "xrp_price"]):
+                if channel.id not in self.permissions_data["channel_groups"]["public"]:
+                    self.permissions_data["channel_groups"]["public"].append(channel.id)
+                if channel.id not in self.permissions_data["public_channels"]:
+                    self.permissions_data["public_channels"].append(channel.id)
+                
+                # If it's also an information channel
+                if any(keyword in channel_name for keyword in ["welcome", "rules", "announcement", "news", "roles"]):
+                    if channel.id not in self.permissions_data["channel_groups"]["information"]:
+                        self.permissions_data["channel_groups"]["information"].append(channel.id)
+            
+            # General channels detection
+            elif any(keyword in channel_name for keyword in ["general", "chat", "voice", "raid", "giveaway", "game", "project"]):
+                if channel.id not in self.permissions_data["channel_groups"]["general"]:
+                    self.permissions_data["channel_groups"]["general"].append(channel.id)
+            
+            # Alpha channels detection
+            elif "alpha" in channel_name:
+                if channel.id not in self.permissions_data["channel_groups"]["alpha"]:
+                    self.permissions_data["channel_groups"]["alpha"].append(channel.id)
+            
+            # Mod channels detection
+            elif any(keyword in channel_name for keyword in ["mod", "admin", "log", "staff", "bot-log", "modlog", "testing"]):
+                if channel.id not in self.permissions_data["channel_groups"]["mod"]:
+                    self.permissions_data["channel_groups"]["mod"].append(channel.id)
+                
+                # If it's specifically a bot channel
+                if any(keyword in channel_name for keyword in ["bot-log", "bot_log"]):
+                    if channel.id not in self.permissions_data["channel_groups"]["bot"]:
+                        self.permissions_data["channel_groups"]["bot"].append(channel.id)
+        
+        # Save the groups
+        self._save_permissions_data()
+        
+        await status_msg.edit(content="✅ Channel groups set up. Now applying permissions...")
+        
+        # Set up role permissions
+        try:
+            # RULE 1: Public channels - visible to everyone
+            for channel_id in self.permissions_data["channel_groups"]["public"]:
+                channel = guild.get_channel(channel_id)
+                if not channel:
+                    continue
+                
+                await channel.set_permissions(everyone_role, view_channel=True, read_messages=True, 
+                                            read_message_history=True, send_messages=False)
+                await channel.set_permissions(verified_role, view_channel=True, read_messages=True,
+                                           read_message_history=True, send_messages=False)
+                
+                # Special case for verification channel - everyone can send messages there
+                if "verification" in channel.name.lower():
+                    await channel.set_permissions(everyone_role, send_messages=True)
+                
+                # Add delay to prevent rate limiting
+                await asyncio.sleep(0.5)
+            
+            # RULE 2: Information channels - no one can send messages except mods and admins
+            for channel_id in self.permissions_data["channel_groups"]["information"]:
+                channel = guild.get_channel(channel_id)
+                if not channel:
+                    continue
+                
+                await channel.set_permissions(everyone_role, send_messages=False)
+                await channel.set_permissions(verified_role, send_messages=False)
+                await channel.set_permissions(nft_holder_role, send_messages=False)
+                await channel.set_permissions(mod_role, send_messages=True)
+                await channel.set_permissions(admin_role, send_messages=True)
+                
+                # Add delay to prevent rate limiting
+                await asyncio.sleep(0.5)
+            
+            # RULE 3: General channels - only verified users and above can see
+            for channel_id in self.permissions_data["channel_groups"]["general"]:
+                channel = guild.get_channel(channel_id)
+                if not channel:
+                    continue
+                
+                await channel.set_permissions(everyone_role, view_channel=False, read_messages=False)
+                await channel.set_permissions(verified_role, view_channel=True, read_messages=True,
+                                           send_messages=True, add_reactions=True)
+                
+                # Add delay to prevent rate limiting
+                await asyncio.sleep(0.5)
+            
+            # RULE 4: Alpha channels - only NFT holders and above can see
+            for channel_id in self.permissions_data["channel_groups"]["alpha"]:
+                channel = guild.get_channel(channel_id)
+                if not channel:
+                    continue
+                
+                await channel.set_permissions(everyone_role, view_channel=False, read_messages=False)
+                await channel.set_permissions(verified_role, view_channel=False, read_messages=False)
+                await channel.set_permissions(nft_holder_role, view_channel=True, read_messages=True,
+                                          send_messages=True, add_reactions=True)
+                
+                # Add delay to prevent rate limiting
+                await asyncio.sleep(0.5)
+            
+            # RULE 5: Mod channels - only mods, admins, and bots can see
+            for channel_id in self.permissions_data["channel_groups"]["mod"]:
+                channel = guild.get_channel(channel_id)
+                if not channel:
+                    continue
+                
+                await channel.set_permissions(everyone_role, view_channel=False, read_messages=False)
+                await channel.set_permissions(verified_role, view_channel=False, read_messages=False)
+                await channel.set_permissions(nft_holder_role, view_channel=False, read_messages=False)
+                await channel.set_permissions(bot_role, view_channel=True, read_messages=True, 
+                                           send_messages=True)
+                await channel.set_permissions(mod_role, view_channel=True, read_messages=True,
+                                           send_messages=True)
+                await channel.set_permissions(admin_role, view_channel=True, read_messages=True,
+                                           send_messages=True)
+                
+                # Add delay to prevent rate limiting
+                await asyncio.sleep(0.5)
+            
+            # RULE 6: Bot channels - only bots and admins can send messages
+            for channel_id in self.permissions_data["channel_groups"]["bot"]:
+                channel = guild.get_channel(channel_id)
+                if not channel:
+                    continue
+                
+                await channel.set_permissions(mod_role, send_messages=False)
+                await channel.set_permissions(bot_role, send_messages=True)
+                
+                # Add delay to prevent rate limiting
+                await asyncio.sleep(0.5)
+            
+            # Send success message with summary
+            embed = discord.Embed(
+                title="✅ XGC Server Permissions Setup Complete",
+                description="All channel permissions have been set up according to the XGC role hierarchy.",
+                color=discord.Color.green()
+            )
+            
+            # Add info about each group to the embed
+            public_channels = [guild.get_channel(id).name for id in self.permissions_data["channel_groups"]["public"] if guild.get_channel(id)]
+            general_channels = [guild.get_channel(id).name for id in self.permissions_data["channel_groups"]["general"] if guild.get_channel(id)]
+            alpha_channels = [guild.get_channel(id).name for id in self.permissions_data["channel_groups"]["alpha"] if guild.get_channel(id)]
+            mod_channels = [guild.get_channel(id).name for id in self.permissions_data["channel_groups"]["mod"] if guild.get_channel(id)]
+            
+            if public_channels:
+                embed.add_field(name="Public Channels", value=", ".join(public_channels) if len(public_channels) < 10 else f"{len(public_channels)} channels", inline=False)
+            if general_channels:
+                embed.add_field(name="General Channels", value=", ".join(general_channels) if len(general_channels) < 10 else f"{len(general_channels)} channels", inline=False)
+            if alpha_channels:
+                embed.add_field(name="NFT Holder Channels", value=", ".join(alpha_channels) if len(alpha_channels) < 10 else f"{len(alpha_channels)} channels", inline=False)
+            if mod_channels:
+                embed.add_field(name="Mod Channels", value=", ".join(mod_channels) if len(mod_channels) < 10 else f"{len(mod_channels)} channels", inline=False)
+            
+            await ctx.send(embed=embed)
+            
+        except discord.Forbidden:
+            await ctx.send("❌ Error: I don't have permission to modify channel permissions.")
+        except Exception as e:
+            await ctx.send(f"❌ Error setting permissions: {str(e)}")
+    
     @commands.command(name="quicksetup")
     async def quick_setup(self, ctx):
         """Quickly set up default channel groups and permissions."""
