@@ -1,24 +1,28 @@
 # XGC Crypto Discord Bot
 
-A Discord bot designed specifically for crypto communities with features including account verification, role management, moderation tools, welcome/goodbye messages, and advanced server setup.
+A Discord bot designed specifically for crypto communities with features including account verification, role management, moderation tools, welcome/goodbye messages, and advanced server setup with role-based permission management.
 
 ## Features
 
 ### 1. Account Verification
 - Reaction-based verification system
 - Auto-DM instructions to new members
+- Custom verification messages
 
 ### 2. Role Management
 - Manual role assignment by moderators
 - Self-assignable roles for members
+- Role hierarchy management
 
 ### 3. Moderation Tools
 - Kick and ban commands
 - Message clearing functionality
+- Logging system for moderator actions
 
 ### 4. Welcome/Goodbye Messages
 - Automatic welcome messages for new members
 - Goodbye messages when members leave
+- Customizable message templates
 
 ### 5. Server Setup
 - Advanced server setup tools for creating a complete crypto server structure
@@ -26,6 +30,7 @@ A Discord bot designed specifically for crypto communities with features includi
 - Role-based access control for channels
 - Granular permission management for roles and channels
 - Channel grouping for bulk permission management
+- One-command server permission setup for standardized role hierarchies
 
 ## Setup Instructions
 
@@ -70,6 +75,10 @@ A Discord bot designed specifically for crypto communities with features includi
 
 ### Role Management
 - `!role @user [role]` - Assign a role to a user (mod only)
+- `!assign_role @user [role]` - Assign a role to a user (mod only)
+- `!remove_role @user [role]` - Remove a role from a user (mod only)
+- `!has_permission @user [permission]` - Check if a user has a specific permission
+- `!has_role @user [role]` - Check if a user has a specific role
 
 ### Moderation Commands
 - `!kick @user [reason]` - Kick a user from the server (mod only)
@@ -96,6 +105,7 @@ A Discord bot designed specifically for crypto communities with features includi
 - `!channels role copy <from_role> <to_role> [#channel]` - Copy permissions from one role to another
 - `!channels preset <preset_name>` - Apply a preset permission configuration (crypto, community, minimal)
 - `!channels lockdown <mode>` - Lock down server to prevent spam (all, public, verified, unlock)
+- `!channels setup_xgc_permissions` - Automatically set up a complete XGC server permission structure with role hierarchy
 - `!quicksetup` - Automatically set up default channel groups and permissions
 
 ### Server Setup Commands (Admin Only)
@@ -104,6 +114,58 @@ A Discord bot designed specifically for crypto communities with features includi
 - `!create_category "Category Name"` - Create a new category with proper permissions
 - `!create_channel "Category Name" "channel-name" [public]` - Create a new channel in a category
 - `!add_role_to_channels "Role Name" ["Category Name"] [can_view=True] [can_send=True]` - Set channel permissions for a specific role
+
+## XGC Permission Structure
+
+The `!channels setup_xgc_permissions` command configures a complete permission structure based on the following role hierarchy:
+
+### Role Hierarchy
+1. **New Users** (unverified)
+   - Can only see specific public channels (Verification, Welcome, Rules, Total Members, XRP Price)
+   - Can only send messages in verification channel
+
+2. **Verified Users**
+   - Can see all general channels
+   - Cannot see mod channels or alpha channels
+   - Cannot type in information channels
+
+3. **NFT Holders**
+   - All Verified User permissions
+   - Can access Alpha Chat channels
+
+4. **XGC (Bots)**
+   - All NFT Holder permissions
+   - Can access mod channels
+
+5. **Moderators**
+   - Full access to all channels except bot-only sections
+   - Can post in information channels
+
+6. **Admins**
+   - Full access to everything
+
+### Channel Categories
+The command automatically categorizes channels into:
+
+- **Public** - `verification`, `welcome`, `rules`, `total-members`, `xrp-price`
+- **Information** - `welcome`, `rules`, `roles`, `xgc-news`
+- **General** - `general`, `voice-channels`, `raids`, `giveaways`, `game-nights`, `project-hub`
+- **Alpha** - `alpha-chat`
+- **Mod** - `bot-logs`, `modlog`, `testing`
+- **Bot** - `bot-logs`
+
+### Usage Example
+To automatically set up the entire server permission structure:
+```
+!channels setup_xgc_permissions
+```
+
+This single command will:
+1. Create any missing roles (NFT Holder, XGC, Moderator, Admin)
+2. Assign appropriate colors to these roles
+3. Categorize all channels based on their names
+4. Apply all permissions according to the role hierarchy
+5. Show a summary of what was configured
 
 ## Server Setup Features
 
@@ -205,107 +267,132 @@ Apply pre-made permission configurations to your server:
 ```
 
 Available presets:
-- `crypto` - Optimal configuration for crypto servers with trading channels
-- `community` - General community server setup
-- `minimal` - Minimal configuration with basic public/private separation
+- `crypto` - Configured for crypto community with trading, analysis, and news sections
+- `community` - General community server with topic-based channels
+- `minimal` - Basic server with just public/verified separation
 
-### 6. Role-Based Management
+## Advanced Usage
 
-Manage permissions for roles across many channels at once:
+### Working with Channel IDs
 
-```
-!channels role allow Moderator manage_messages #mod-chat #admin-chat #support
-!channels role deny Trader send_messages #announcements
-!channels role copy Admin Moderator
-```
-
-### 7. Emergency Lockdown
-
-Quickly lock down your server in case of spam or raids:
+All commands work with both channel mentions and IDs:
 
 ```
-!channels lockdown all
-```
-
-Lockdown modes:
-- `all`: Lock down all channels (default)
-- `public`: Lock down only public channels
-- `verified`: Lock down channels visible to verified users
-- `unlock`: Remove the lockdown
-
-During lockdown, message sending is disabled for all users, but they can still read messages.
-
-### 8. Managing Voice Channels
-
-You can manage permissions for voice channels just like text channels:
-
-```
-!channels set_verified_only general-voice  # Make a voice channel verified-only
-!channels set_public xgc-theater           # Make a voice channel public
-```
-
-For voice channels, use the channel name directly (don't use # or mentions).
-
-### 9. Using Channel IDs
-
-For all channel commands, you can use channel IDs instead of names:
-
-```
-!channels set_verified_only 1234567890123456  # Make channel with this ID verified-only
-!channels set_public 9876543210987654         # Make channel with this ID public
-```
-
-This is especially useful when:
-- Multiple channels have the same name
-- Channel names have special characters
-- You need to reference voice channels
-
-To get a channel's ID, right-click on it and select "Copy ID" (requires Developer Mode enabled in Discord settings).
-
-## Advanced Features
-
-### Using IDs Instead of Names
-
-For all commands that accept user, role, or channel inputs, you can use IDs instead of names:
-
-```
-# Using role IDs
-!assign 1234567890123456 9876543210987654  # Assign a role by ID to a user by ID
-!assign @UserMention 9876543210987654      # Assign a role by ID to a mentioned user
-!role_info 9876543210987654                # Get info about a role by ID
-
-# Using user IDs
-!kick 1234567890123456                     # Kick a user by ID
-!ban 1234567890123456                      # Ban a user by ID
-!unban 1234567890123456                    # Unban a user by ID
-
-# Using channel IDs
-!channels set_verified_only 1234567890123456  # Make a channel verified-only by ID
-!channels set_public 9876543210987654         # Make a channel public by ID
+!channels set_permission #welcome Verified send_messages false
+!channels set_permission 1234567890123456 Verified send_messages false
+!channels set_public 9876543210987654
 ```
 
 This is especially useful when:
 - Discord's mention system isn't working well
-- You're dealing with entities with special characters in names
-- You need to reference users who aren't in the server (e.g., for banning)
-- You're targeting voice channels that can't be mentioned
+- You want to script commands
+- Channels are in different categories
 
-To get an ID, right-click on a user, role, or channel and select "Copy ID" (requires Developer Mode enabled in Discord settings).
+### Debugging Permissions
 
-### 8. Managing Voice Channels
-You can manage permissions for voice channels just like text channels:
+To troubleshoot permission issues:
 
 ```
-!channels set_verified_only general-voice  # Make a voice channel verified-only
-!channels set_public xgc-theater           # Make a voice channel public
+!channels info #channel-name
+!channels role view "Role Name"
 ```
 
-For voice channels, use the channel name directly (don't use # or mentions).
+This shows all permission overwrites for a channel, helping identify conflicts or missing permissions.
 
-## Configuration
+### Permission Inheritance
 
-Edit the `config.py` file to customize:
-- Available self-assignable roles
-- Welcome/goodbye message format
-- Command prefix
-- Permission levels
+The bot follows Discord's permission system:
+1. Server-wide permissions (set in Server Settings > Roles)
+2. Category permissions
+3. Channel-specific permissions
+4. User-specific permissions (not managed by the bot)
+
+When using channel groups, permissions are applied directly to each channel, not at the category level.
+
+## Creating Commands for XGC Bot
+
+To extend the XGC bot with new commands, create Python files in the `cogs` directory following this structure:
+
+1. Import required modules:
+```python
+import discord
+from discord.ext import commands
+```
+
+2. Create a class that inherits from `commands.Cog`:
+```python
+class YourCogName(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+```
+
+3. Define commands using the `@commands.command()` decorator:
+```python
+    @commands.command(name="your_command")
+    async def your_command(self, ctx, arg1, arg2=None):
+        """Command description for help text"""
+        # Command logic here
+        await ctx.send("Response to user")
+```
+
+4. Add a setup function to register the cog:
+```python
+def setup(bot):
+    bot.add_cog(YourCogName(bot))
+```
+
+5. Load the cog in `bot.py` by adding:
+```python
+bot.load_extension("cogs.your_file_name")
+```
+
+### Permission Requirements
+
+To restrict commands to specific roles or permissions:
+
+```python
+@commands.command(name="mod_only_command")
+@commands.has_permissions(kick_members=True)
+async def mod_only_command(self, ctx):
+    # Command logic here
+```
+
+Or with custom role checks:
+```python
+@commands.command(name="admin_only")
+@commands.has_role("Admin")
+async def admin_only(self, ctx):
+    # Command logic here
+```
+
+### Command Groups
+
+For complex command sets with subcommands:
+
+```python
+@commands.group(name="parent")
+async def parent(self, ctx):
+    if ctx.invoked_subcommand is None:
+        await ctx.send("Please specify a subcommand")
+
+@parent.command(name="child")
+async def parent_child(self, ctx):
+    await ctx.send("You used the child command")
+```
+
+This creates commands like `!parent child`.
+
+### Error Handling
+
+Add error handlers for graceful error management:
+
+```python
+@your_command.error
+async def your_command_error(self, ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("Error: Missing required argument")
+    elif isinstance(error, commands.CommandInvokeError):
+        await ctx.send(f"Error: {str(error)}")
+```
+
+For comprehensive documentation on Discord.py, visit the [official Discord.py documentation](https://discordpy.readthedocs.io/).
