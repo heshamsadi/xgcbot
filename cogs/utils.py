@@ -159,6 +159,92 @@ class Utilities(commands.Cog):
         else:
             await ctx.send("❌ Welcome channel ID not configured. Please set WELCOME_CHANNEL_ID in your .env file.")
 
+    @commands.command(name="listchannels")
+    @commands.has_permissions(administrator=True)
+    async def list_channels(self, ctx):
+        """Lists all channel IDs that the bot can see."""
+        channels = sorted(ctx.guild.channels, key=lambda c: c.position)
+        
+        embed = discord.Embed(
+            title=f"Channels in {ctx.guild.name}",
+            description="Here are all the channels the bot can see:",
+            color=discord.Color.blue()
+        )
+        
+        # Text Channels
+        text_channels = [ch for ch in channels if isinstance(ch, discord.TextChannel)]
+        if text_channels:
+            text_channel_list = "\n".join([f"- {ch.name}: `{ch.id}`" for ch in text_channels])
+            embed.add_field(
+                name="Text Channels",
+                value=text_channel_list[:1024] if len(text_channel_list) <= 1024 else text_channel_list[:1021] + "...",
+                inline=False
+            )
+        
+        # Voice Channels
+        voice_channels = [ch for ch in channels if isinstance(ch, discord.VoiceChannel)]
+        if voice_channels:
+            voice_channel_list = "\n".join([f"- {ch.name}: `{ch.id}`" for ch in voice_channels])
+            embed.add_field(
+                name="Voice Channels",
+                value=voice_channel_list[:1024] if len(voice_channel_list) <= 1024 else voice_channel_list[:1021] + "...",
+                inline=False
+            )
+        
+        # Categories
+        categories = [ch for ch in channels if isinstance(ch, discord.CategoryChannel)]
+        if categories:
+            category_list = "\n".join([f"- {ch.name}: `{ch.id}`" for ch in categories])
+            embed.add_field(
+                name="Categories",
+                value=category_list[:1024] if len(category_list) <= 1024 else category_list[:1021] + "...",
+                inline=False
+            )
+        
+        await ctx.send(embed=embed)
+    
+    @commands.command(name="checkenv")
+    @commands.has_permissions(administrator=True)
+    async def check_env_vars(self, ctx):
+        """Check if environment variables are loaded correctly."""
+        embed = discord.Embed(
+            title="Environment Variables Check",
+            description="Checking if environment variables are loaded correctly",
+            color=discord.Color.blue()
+        )
+        
+        # Check channel IDs
+        embed.add_field(
+            name="Channel IDs",
+            value=(
+                f"WELCOME_CHANNEL_ID: `{config.WELCOME_CHANNEL_ID}`\n"
+                f"VERIFICATION_CHANNEL_ID: `{config.VERIFICATION_CHANNEL_ID}`\n"
+                f"MOD_CHANNEL_ID: `{config.MOD_CHANNEL_ID}`\n"
+                f"RULES_CHANNEL_ID: `{config.RULES_CHANNEL_ID}`\n"
+                f"ROLES_CHANNEL_ID: `{config.ROLES_CHANNEL_ID}`"
+            ),
+            inline=False
+        )
+        
+        # Check role IDs
+        embed.add_field(
+            name="Role IDs",
+            value=(
+                f"VERIFIED_ROLE_ID: `{config.VERIFIED_ROLE_ID}`\n"
+                f"MOD_ROLE_ID: `{config.MOD_ROLE_ID}`"
+            ),
+            inline=False
+        )
+        
+        # Check message IDs
+        embed.add_field(
+            name="Message IDs",
+            value=f"VERIFICATION_MESSAGE_ID: `{config.VERIFICATION_MESSAGE_ID}`",
+            inline=False
+        )
+        
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     # Try to import psutil for system stats
     try:
