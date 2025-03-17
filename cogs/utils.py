@@ -130,6 +130,35 @@ class Utilities(commands.Cog):
         
         await ctx.send(embed=embed)
 
+    @commands.command(name="welcome")
+    @commands.has_permissions(administrator=True)
+    async def manual_welcome(self, ctx, member: discord.Member):
+        """Manually send the welcome message for a member."""
+        if config.WELCOME_CHANNEL_ID:
+            welcome_channel = self.bot.get_channel(config.WELCOME_CHANNEL_ID)
+            if welcome_channel:
+                # Get member stats
+                guild = member.guild
+                total_members = len(guild.members)
+                online_members = sum(1 for m in guild.members if m.status != discord.Status.offline)
+                join_date = member.joined_at.strftime("%B %d, %Y") if member.joined_at else datetime.utcnow().strftime("%B %d, %Y")
+                
+                welcome_msg = config.WELCOME_MESSAGE.format(
+                    member_mention=member.mention,
+                    verification_channel=config.VERIFICATION_CHANNEL_ID,
+                    rules_channel=config.RULES_CHANNEL_ID,
+                    roles_channel=config.ROLES_CHANNEL_ID,
+                    total_members=total_members,
+                    online_members=online_members,
+                    join_date=join_date
+                )
+                await welcome_channel.send(welcome_msg)
+                await ctx.send(f"✅ Welcome message sent for {member.display_name} in <#{config.WELCOME_CHANNEL_ID}>")
+            else:
+                await ctx.send("❌ Welcome channel not found. Please check your configuration.")
+        else:
+            await ctx.send("❌ Welcome channel ID not configured. Please set WELCOME_CHANNEL_ID in your .env file.")
+
 async def setup(bot):
     # Try to import psutil for system stats
     try:
