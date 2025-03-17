@@ -24,6 +24,14 @@ VERIFICATION_MESSAGE_ID = int(os.getenv('VERIFICATION_MESSAGE_ID', 0))
 VERIFIED_ROLE_ID = int(os.getenv('VERIFIED_ROLE_ID', 0))
 MOD_ROLE_ID = int(os.getenv('MOD_ROLE_ID', 0))
 
+# Channel auto-deletion settings (channel_id: {settings})
+AUTO_DELETE_CHANNELS = {
+    1346516440945004564: {  # Alpha verification channel
+        'delete_after': 5,  # Delete messages after 5 seconds
+        'protected': True,  # Protect bot announcements
+    }
+}
+
 # Self-assignable roles (role_name: role_id)
 SELF_ASSIGNABLE_ROLES = {
     "trader": "Trader",

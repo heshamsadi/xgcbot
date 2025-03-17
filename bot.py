@@ -58,7 +58,8 @@ async def on_ready():
             "cogs.utils",
             "cogs.verification",
             "cogs.server_setup",
-            "cogs.advanced_permissions"
+            "cogs.advanced_permissions",
+            "cogs.channel_management"
         ]:
             try:
                 await bot.load_extension(extension)
