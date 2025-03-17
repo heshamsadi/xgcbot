@@ -154,18 +154,10 @@ class Roles(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def create_roles_message(self, ctx):
         """Creates a beautifully formatted message for role selection with reactions."""
-        # Debug information
-        await ctx.send(f"Looking for roles channel with ID: {config.ROLES_CHANNEL_ID}")
-        
         roles_channel = self.bot.get_channel(config.ROLES_CHANNEL_ID)
         
         if not roles_channel:
-            await ctx.send(f"❌ Roles channel not found. Please set it up in config. ROLES_CHANNEL_ID={config.ROLES_CHANNEL_ID}")
-            
-            # List available channels for debugging
-            channel_list = "\n".join([f"- {ch.name}: {ch.id}" for ch in ctx.guild.text_channels[:10]])
-            await ctx.send(f"Available text channels (showing up to 10):\n{channel_list}")
-            return
+            return await ctx.send("❌ Roles channel not found. Please set it up in config.")
         
         embed = discord.Embed(
             title="🎭 XGC Trenches Role Selection",
