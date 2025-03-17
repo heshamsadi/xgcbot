@@ -74,9 +74,20 @@ async def on_member_join(member):
     if config.WELCOME_CHANNEL_ID:
         welcome_channel = bot.get_channel(config.WELCOME_CHANNEL_ID)
         if welcome_channel:
+            # Get member stats
+            guild = member.guild
+            total_members = len(guild.members)
+            online_members = sum(1 for m in guild.members if m.status != discord.Status.offline)
+            join_date = member.joined_at.strftime("%B %d, %Y")
+            
             welcome_msg = config.WELCOME_MESSAGE.format(
                 member_mention=member.mention,
-                verification_channel=config.VERIFICATION_CHANNEL_ID
+                verification_channel=config.VERIFICATION_CHANNEL_ID,
+                rules_channel=config.RULES_CHANNEL_ID,
+                roles_channel=config.ROLES_CHANNEL_ID,
+                total_members=total_members,
+                online_members=online_members,
+                join_date=join_date
             )
             await welcome_channel.send(welcome_msg)
     

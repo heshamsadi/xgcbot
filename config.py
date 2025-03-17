@@ -14,6 +14,8 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 WELCOME_CHANNEL_ID = int(os.getenv('WELCOME_CHANNEL_ID', 0))
 VERIFICATION_CHANNEL_ID = int(os.getenv('VERIFICATION_CHANNEL_ID', 0))
 MOD_CHANNEL_ID = int(os.getenv('MOD_CHANNEL_ID', 0))
+RULES_CHANNEL_ID = int(os.getenv('RULES_CHANNEL_ID', 0))
+ROLES_CHANNEL_ID = int(os.getenv('ROLES_CHANNEL_ID', 0))
 
 # Message IDs
 VERIFICATION_MESSAGE_ID = int(os.getenv('VERIFICATION_MESSAGE_ID', 0))
@@ -32,7 +34,20 @@ SELF_ASSIGNABLE_ROLES = {
 }
 
 # Welcome message format
-WELCOME_MESSAGE = "Welcome to the XGC Trenches XRPL, {member_mention}! 🚀 Please check out <#{verification_channel}> to get verified."
+WELCOME_MESSAGE = """
+🎉 **Welcome to XGC Trenches XRPL**, {member_mention}! 🚀
+
+You've entered the Alpha Zone.
+📜 Read the rules in <#{rules_channel}>
+🎭 Grab roles in <#{roles_channel}>
+✅ Get verified in <#{verification_channel}>
+
+🌍 Total Members: {total_members}
+🟢 Online Members: {online_members}
+🔥 Join Date: {join_date}
+
+*Stay ahead of the market with XGC Trenches XRPL!*
+"""
 
 # Goodbye message format
 GOODBYE_MESSAGE = "**{member_name}** has left the server. 👋"
