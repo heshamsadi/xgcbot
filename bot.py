@@ -59,7 +59,8 @@ async def on_ready():
             "cogs.verification",
             "cogs.server_setup",
             "cogs.advanced_permissions",
-            "cogs.channel_management"
+            "cogs.channel_management",
+            "cogs.youtube_notifications"
         ]:
             try:
                 await bot.load_extension(extension)
@@ -237,6 +238,21 @@ async def _help(ctx):
             f"`{config.PREFIX}assign <@user|name|id> <@role|name|id>` - Assign a role to a user\n"
             f"`{config.PREFIX}remove <@user|name|id> <@role|name|id>` - Remove a role from a user\n"
             f"`{config.PREFIX}role_info <@role|name|id>` - Get information about a role\n"
+        ),
+        inline=False
+    )
+    
+    # YouTube commands
+    embed.add_field(
+        name="YouTube Notifications",
+        value=(
+            f"`{config.PREFIX}youtube` - Show YouTube commands overview\n"
+            f"`{config.PREFIX}youtube setapikey <key>` - Set YouTube API key\n"
+            f"`{config.PREFIX}youtube add <channel_id> <#discord_channel>` - Track a YouTube channel\n"
+            f"`{config.PREFIX}youtube list` - List tracked channels\n"
+            f"`{config.PREFIX}youtube test [channel_id]` - Test notifications\n"
+            f"`{config.PREFIX}youtube debug` - Check API key status\n"
+            f"`{config.PREFIX}youtube force <channel_id>` - Force post latest video\n"
         ),
         inline=False
     )

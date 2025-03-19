@@ -4,7 +4,15 @@
         1346506902946840638,
         1349873745761796106
     ],
-    "role_permissions": {},
+    "role_permissions": {
+        "1349869112247193620": {
+            "channels": {
+                "1352016523660628130": {
+                    "view_channel": true
+                }
+            }
+        }
+    },
     "channel_groups": {
         "public": [],
         "verified_only": [
