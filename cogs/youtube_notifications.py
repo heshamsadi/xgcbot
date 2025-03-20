@@ -468,12 +468,16 @@ class YouTubeNotifications(commands.Cog):
         # Create and send notification
         embed = await self.create_video_embed(latest_video)
         
-        test_msg = await discord_channel.send(
-            f"📺 **New Upload from {latest_video['snippet']['channelTitle']}!**",
+        # Send the test message to the current channel instead of the configured notification channel
+        await status_msg.edit(
+            content=f"✅ Test notification for channel **{channel_info['name']}**\nVideo: **{latest_video['snippet']['title']}**\n\nThis would be posted to {discord_channel.mention} and would look like:",
             embed=embed
         )
         
-        await status_msg.edit(content=f"✅ Test notification sent to {discord_channel.mention}\nChannel: {channel_info['name']}\nVideo: {latest_video['snippet']['title']}")
+        # Also send an example of what the message would look like
+        await ctx.send(
+            f"🔔 **New Video Alert!** 🔔\n📺 **{latest_video['snippet']['channelTitle']}** just uploaded a new video!\n👉 **Click the title in the embed below to watch!** 👈"
+        )
     
     @youtube.command(name="force")
     @commands.has_permissions(administrator=True)
@@ -512,7 +516,7 @@ class YouTubeNotifications(commands.Cog):
         embed = await self.create_video_embed(latest_video)
         
         await discord_channel.send(
-            f"📺 **Latest Video from {latest_video['snippet']['channelTitle']}!**",
+            f"🔥 **Featured Video!** 🔥\n📺 **{latest_video['snippet']['channelTitle']}** has an awesome video you should watch!\n👉 **Click the title in the embed below to watch on YouTube!** 👈",
             embed=embed
         )
         
@@ -633,9 +637,9 @@ class YouTubeNotifications(commands.Cog):
         
         # Create the embed
         embed = discord.Embed(
-            title=snippet["title"],
+            title=f"🎬 {snippet['title']}",
             url=f"https://www.youtube.com/watch?v={video_id}",
-            description=snippet["description"][:200] + "..." if len(snippet["description"]) > 200 else snippet["description"],
+            description=f"{snippet['description'][:200] + '...' if len(snippet['description']) > 200 else snippet['description']}\n\n**👆 Click the title above to watch this video on YouTube! 👆**",
             color=discord.Color.red(),
             timestamp=datetime.datetime.fromisoformat(snippet["publishedAt"].replace('Z', '+00:00'))
         )
@@ -650,7 +654,7 @@ class YouTubeNotifications(commands.Cog):
             url=f"https://www.youtube.com/channel/{snippet['channelId']}"
         )
         
-        embed.set_footer(text=f"Published on YouTube")
+        embed.set_footer(text=f"Published on YouTube • Click the title to watch")
         
         return embed
     
@@ -702,7 +706,7 @@ class YouTubeNotifications(commands.Cog):
                 embed = await self.create_video_embed(latest_video)
                 
                 await discord_channel.send(
-                    f"📺 **New Upload from {latest_video['snippet']['channelTitle']}!**",
+                    f"🚨 **New Content Alert!** 🚨\n📺 **{latest_video['snippet']['channelTitle']}** just dropped a fresh video!\n👀 **Click the video title in the embed below to watch on YouTube!** 💯",
                     embed=embed
                 )
             except Exception as e:
